@@ -12,13 +12,14 @@ const authorize = (allowedRoles) => {
     // Convert to array if string is passed
     const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
-    if (!roles.includes(req.user.role)) {
-      return next(
-        new AuthorizationError(`Access denied. Required roles: ${roles.join(', ')}`)
-      );
+    // SUPER_ADMIN has access to everything
+    if (req.user.role === 'SUPER_ADMIN' || roles.includes(req.user.role)) {
+      return next();
     }
 
-    next();
+    return next(
+      new AuthorizationError(`Access denied. Required roles: ${roles.join(', ')}`)
+    );
   };
 };
 

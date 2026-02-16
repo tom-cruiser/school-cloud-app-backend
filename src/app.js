@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -30,6 +31,9 @@ app.use(cors({
 // Body parser middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Static file serving for uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Disable HTTP caching for API responses to prevent 304 errors
 app.use('/api', (req, res, next) => {

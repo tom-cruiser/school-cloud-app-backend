@@ -10,7 +10,7 @@ exports.getAllTransportRoutes = async (schoolId) => {
     orderBy: { routeName: 'asc' },
   });
 
-  return { data: routes };
+  return routes;
 };
 
 exports.createTransportRoute = async (data, schoolId) => {

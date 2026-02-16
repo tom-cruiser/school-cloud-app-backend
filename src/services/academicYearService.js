@@ -7,7 +7,7 @@ exports.getAllAcademicYears = async (schoolId) => {
     orderBy: { startDate: 'desc' },
   });
 
-  return { data: academicYears };
+  return academicYears;
 };
 
 exports.getAcademicYearById = async (id, schoolId) => {

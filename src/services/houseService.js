@@ -10,7 +10,7 @@ exports.getAllHouses = async (schoolId) => {
     orderBy: { name: 'asc' },
   });
 
-  return { data: houses };
+  return houses;
 };
 
 exports.createHouse = async (data, schoolId) => {

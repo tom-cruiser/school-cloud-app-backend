@@ -631,26 +631,42 @@ class TeacherService {
         teacherId,
         schoolId,
       },
-      include: {
-        students: {
-          include: {
-            user: true,
-          },
-        },
-      },
     });
 
     if (!classData) {
       throw new NotFoundError('Class not found or unauthorized');
     }
 
-    return classData.students.map(student => ({
-      id: student.id,
-      firstName: student.user.firstName,
-      lastName: student.user.lastName,
-      rollNumber: student.rollNumber,
-      email: student.user.email,
-      profileImage: student.user.profileImage,
+    const classStudents = await prisma.classStudent.findMany({
+      where: {
+        classId,
+      },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        enrolledAt: 'asc',
+      },
+    });
+
+    return classStudents.map((classStudent) => ({
+      id: classStudent.studentId,
+      firstName: classStudent.student?.user?.firstName || '',
+      lastName: classStudent.student?.user?.lastName || '',
+      rollNumber: classStudent.student?.studentNumber || '-',
+      email: classStudent.student?.user?.email || null,
+      profileImage: classStudent.student?.user?.avatar || null,
     }));
   }
 
@@ -667,7 +683,11 @@ class TeacherService {
       include: {
         students: {
           include: {
-            user: true,
+            student: {
+              include: {
+                user: true,
+              },
+            },
           },
         },
       },
@@ -689,15 +709,15 @@ class TeacherService {
       },
     });
 
-    return classData.students.map(student => {
-      const record = attendanceRecords.find(r => r.studentId === student.id);
+    return classData.students.map(classStudent => {
+      const record = attendanceRecords.find(r => r.studentId === classStudent.studentId);
       return {
         id: record?.id || null,
-        studentId: student.id,
-        studentName: `${student.user.firstName} ${student.user.lastName}`,
-        rollNumber: student.rollNumber,
+        studentId: classStudent.studentId,
+        studentName: `${classStudent.student.user.firstName} ${classStudent.student.user.lastName}`,
+        rollNumber: classStudent.student.studentNumber,
         status: record?.status?.toLowerCase() || null,
-        notes: record?.notes || '',
+        notes: record?.remarks || '',
       };
     });
   }
@@ -725,23 +745,23 @@ class TeacherService {
       attendanceData.map(async (record) => {
         return prisma.attendance.upsert({
           where: {
-            studentId_classId_date: {
+            classId_studentId_date: {
+              classId,
               studentId: record.studentId,
-              classId: classId,
               date: attendanceDate,
             },
           },
           create: {
+            schoolId,
             studentId: record.studentId,
-            classId: classId,
+            classId,
             date: attendanceDate,
             status: record.status.toUpperCase(),
-            notes: record.notes || null,
-            markedBy: teacherId,
+            remarks: record.notes || null,
           },
           update: {
             status: record.status.toUpperCase(),
-            notes: record.notes || null,
+            remarks: record.notes || null,
           },
         });
       })
@@ -882,101 +902,169 @@ class TeacherService {
    * Update an assignment
    */
   async updateAssignment(assignmentId, teacherId, schoolId, updateData) {
-    // Verify teacher owns this assignment
-    const assignment = await prisma.assignment.findFirst({
-      where: {
-        id: assignmentId,
+    try {
+      console.log('TeacherService.updateAssignment called with:', {
+        assignmentId,
         teacherId,
         schoolId,
-      },
-    });
+        updateData
+      });
 
-    if (!assignment) {
-      throw new NotFoundError('Assignment not found or you do not have access');
-    }
+      // Verify assignment exists
+      const existingAssignment = await prisma.assignment.findFirst({
+        where: {
+          id: assignmentId,
+        },
+      });
 
-    const updated = await prisma.assignment.update({
-      where: { id: assignmentId },
-      data: {
-        ...updateData,
-        dueDate: updateData.dueDate
-          ? new Date(updateData.dueDate)
-          : undefined,
-      },
-      include: {
-        class: {
-          include: {
-            gradeLevel: true,
-            subject: true,
+      console.log('Assignment exists check:', existingAssignment);
+
+      if (!existingAssignment) {
+        console.log('Assignment not found with ID:', assignmentId);
+        throw new NotFoundError('Assignment not found');
+      }
+
+      // Verify teacher owns this assignment
+      const teacherAssignment = await prisma.assignment.findFirst({
+        where: {
+          id: assignmentId,
+          teacherId,
+          schoolId,
+        },
+      });
+
+      console.log('Teacher ownership check:', teacherAssignment);
+
+      if (!teacherAssignment) {
+        console.log('Teacher does not have access to assignment:', { assignmentId, teacherId, schoolId });
+        throw new NotFoundError('Assignment not found or you do not have access');
+      }
+
+      // Prepare update data, excluding undefined values
+      const updateFields = {};
+      if (updateData.title !== undefined) updateFields.title = updateData.title;
+      if (updateData.description !== undefined) updateFields.description = updateData.description;
+      if (updateData.classId !== undefined) updateFields.classId = updateData.classId;
+      if (updateData.maxPoints !== undefined) updateFields.maxPoints = parseInt(updateData.maxPoints);
+      if (updateData.attachments !== undefined) updateFields.attachments = updateData.attachments || null;
+      if (updateData.dueDate !== undefined) updateFields.dueDate = new Date(updateData.dueDate);
+
+      console.log('Update fields:', updateFields);
+
+      const updated = await prisma.assignment.update({
+        where: { id: assignmentId },
+        data: updateFields,
+        include: {
+          class: {
+            include: {
+              gradeLevel: true,
+              subject: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    logger.info(`Assignment updated: ${assignmentId} by teacher ${teacherId}`);
+      console.log('Assignment updated successfully:', updated.id);
 
-    return updated;
+      logger.info(`Assignment updated: ${assignmentId} by teacher ${teacherId}`);
+
+      return updated;
+    } catch (error) {
+      console.error('TeacherService.updateAssignment error:', error);
+      throw error;
+    }
   }
 
   /**
    * Delete an assignment
    */
   async deleteAssignment(assignmentId, teacherId, schoolId) {
-    // Verify teacher owns this assignment
-    const assignment = await prisma.assignment.findFirst({
-      where: {
-        id: assignmentId,
+    try {
+      console.log('TeacherService.deleteAssignment called with:', {
+        assignmentId,
         teacherId,
-        schoolId,
-      },
-    });
+        schoolId
+      });
 
-    if (!assignment) {
-      throw new NotFoundError('Assignment not found or you do not have access');
+      // Verify teacher owns this assignment
+      const assignment = await prisma.assignment.findFirst({
+        where: {
+          id: assignmentId,
+          teacherId,
+          schoolId,
+        },
+      });
+
+      console.log('Found assignment for deletion:', assignment);
+
+      if (!assignment) {
+        throw new NotFoundError('Assignment not found or you do not have access');
+      }
+
+      // Delete related submissions first to avoid foreign key constraints
+      const deletedSubmissions = await prisma.assignmentSubmission.deleteMany({
+        where: { assignmentId },
+      });
+
+      console.log(`Deleted ${deletedSubmissions.count} submissions for assignment ${assignmentId}`);
+
+      const deletedAssignment = await prisma.assignment.delete({
+        where: { id: assignmentId },
+      });
+
+      console.log('Assignment deleted successfully:', deletedAssignment);
+
+      logger.info(`Assignment deleted: ${assignmentId} by teacher ${teacherId}`);
+
+      return { message: 'Assignment deleted successfully' };
+    } catch (error) {
+      console.error('TeacherService.deleteAssignment error:', error);
+      throw error;
     }
-
-    await prisma.assignment.delete({
-      where: { id: assignmentId },
-    });
-
-    logger.info(`Assignment deleted: ${assignmentId} by teacher ${teacherId}`);
-
-    return { message: 'Assignment deleted successfully' };
   }
 
   /**
    * Get submissions for an assignment
    */
   async getSubmissions(assignmentId, teacherId, schoolId) {
-    // Verify teacher owns this assignment
-    const assignment = await prisma.assignment.findFirst({
-      where: {
-        id: assignmentId,
+    try {
+      console.log('TeacherService.getSubmissions called with:', {
+        assignmentId,
         teacherId,
-        schoolId,
-      },
-      include: {
-        class: {
-          include: {
-            students: {
-              include: {
-                user: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
-                    email: true,
+        schoolId
+      });
+
+      // Verify teacher owns this assignment
+      const assignment = await prisma.assignment.findFirst({
+        where: {
+          id: assignmentId,
+          teacherId,
+          schoolId,
+        },
+        include: {
+          class: {
+            include: {
+              students: {
+                include: {
+                  user: {
+                    select: {
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    if (!assignment) {
-      throw new NotFoundError('Assignment not found or you do not have access');
-    }
+      console.log('Found assignment for submissions:', assignment ? assignment.id : 'null');
+
+      if (!assignment) {
+        throw new NotFoundError('Assignment not found or you do not have access');
+      }
 
     // Get all submissions
     const submissions = await prisma.assignmentSubmission.findMany({
@@ -1045,6 +1133,10 @@ class TeacherService {
         graded: submissions.filter((s) => s.status === 'GRADED').length,
       },
     };
+    } catch (error) {
+      console.error('TeacherService.getSubmissions error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -1145,7 +1237,7 @@ class TeacherService {
       }
 
       where.studentId = {
-        in: classData.students.map((s) => s.id),
+        in: classData.students.map((s) => s.studentId),
       };
     }
 
@@ -1198,7 +1290,7 @@ class TeacherService {
           schoolId,
           students: {
             some: {
-              id: studentId,
+              studentId,
             },
           },
         },

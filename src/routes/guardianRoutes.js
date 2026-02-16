@@ -4,7 +4,14 @@ const guardianController = require('../controllers/guardianController');
 const { authenticate } = require('../middleware/auth');
 const { authorize } = require('../middleware/authorization');
 
-// All routes require authentication as GUARDIAN
+// Admin routes (must come first)
+router.get('/admin/guardians', authenticate, authorize(['SCHOOL_ADMIN']), guardianController.getSchoolGuardians);
+router.post('/admin/guardians', authenticate, authorize(['SCHOOL_ADMIN']), guardianController.createGuardianAsAdmin);
+router.post('/admin/guardians/:guardianId/students', authenticate, authorize(['SCHOOL_ADMIN']), guardianController.linkStudentToGuardian);
+router.delete('/admin/guardians/:guardianId/students/:studentId', authenticate, authorize(['SCHOOL_ADMIN']), guardianController.unlinkStudentFromGuardian);
+router.delete('/admin/guardians/:guardianId', authenticate, authorize(['SCHOOL_ADMIN']), guardianController.deleteGuardianAsAdmin);
+
+// All guardian routes require authentication as GUARDIAN
 router.use(authenticate);
 router.use(authorize(['GUARDIAN']));
 

@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { asyncHandler } = require('../utils/errors');
+const notificationController = require('./notificationController');
 
 /**
  * Send a message
@@ -63,6 +64,19 @@ const sendMessage = asyncHandler(async (req, res) => {
       }
     }
   });
+
+  // Create notification for receiver
+  await notificationController.createNotification(
+    receiverId,
+    {
+      title: `New message from ${req.user.firstName} ${req.user.lastName}`,
+      message: subject || content.substring(0, 100),
+      type: 'info',
+      category: 'message',
+      actionUrl: `/messages/${message.id}`,
+      metadata: { messageId: message.id, senderId }
+    }
+  );
 
   res.status(201).json({
     success: true,

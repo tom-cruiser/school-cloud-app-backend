@@ -12,6 +12,7 @@ const gradeLevelRoutes = require('./gradeLevelRoutes');
 const houseRoutes = require('./houseRoutes');
 const transportRouteRoutes = require('./transportRouteRoutes');
 const libraryRoutes = require('./libraryRoutes');
+const attendanceRoutes = require('./attendanceRoutes');
 const systemRoutes = require('./systemRoutes');
 const supportRoutes = require('./supportRoutes');
 const superAdminSupportRoutes = require('./superAdminSupportRoutes');
@@ -19,6 +20,16 @@ const notificationRoutes = require('./notificationRoutes');
 const messageRoutes = require('./messageRoutes');
 const analyticsRoutes = require('./analyticsRoutes');
 const systemHealthSettingsRoutes = require('./systemHealthSettingsRoutes');
+const subjectRoutes = require('./subjectRoutes');
+const classRoutes = require('./classRoutes');
+const gradeRoutes = require('./gradeRoutes');
+const userAnalyticsRoutes = require('./userAnalyticsRoutes');
+const announcementRoutes = require('./announcementRoutes');
+const groupRoutes = require('./groupRoutes');
+const eventRoutes = require('./eventRoutes');
+const discussionRoutes = require('./discussionRoutes');
+const lessonPlanRoutes = require('./lessonPlanRoutes');
+const schoolSettingsRoutes = require('./schoolSettingsRoutes');
 const config = require('../config');
 
 const router = express.Router();
@@ -52,8 +63,19 @@ router.use('/terms', termRoutes);
 router.use('/grade-levels', gradeLevelRoutes);
 router.use('/houses', houseRoutes);
 router.use('/transport-routes', transportRouteRoutes);
+router.use('/subjects', subjectRoutes);
+router.use('/classes', classRoutes);
+router.use('/grades', gradeRoutes);
+router.use('/analytics', userAnalyticsRoutes);
+router.use('/announcements', announcementRoutes);
 router.use('/library', libraryRoutes);
+router.use('/attendance', attendanceRoutes);
+router.use('/lesson-plans', lessonPlanRoutes);
+router.use('/schools', schoolSettingsRoutes);
 router.use('/system', systemRoutes);
+router.use('/', groupRoutes);
+router.use('/', eventRoutes);
+router.use('/', discussionRoutes);
 
 // 404 handler for API routes
 router.use('*', (req, res) => {

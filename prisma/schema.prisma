@@ -63,6 +63,10 @@ model School {
   primaryColor   String?  @default("#3B82F6")
   secondaryColor String?  @default("#10B981")
   logo           String?
+  reportTemplateModel String?
+  idCardTemplateModel String?
+  reportTemplateFileUrl String?
+  idCardTemplateFileUrl String?
   isActive       Boolean  @default(true)
   maxTeachers    Int      @default(20)
   createdAt      DateTime @default(now())
@@ -89,6 +93,11 @@ model School {
   houses          House[]
   transportRoutes TransportRoute[]
   supportMessages SupportMessage[]
+  groups          Group[]
+  fileUploads     FileUpload[]
+  messageTemplates MessageTemplate[]
+  surveys         Survey[]
+  lessonPlans     LessonPlan[]
 
   @@map("schools")
 }
@@ -121,6 +130,8 @@ model User {
   refreshTokens    RefreshToken[]
   supportMessages  SupportMessage[]
   supportResponses SupportMessage[] @relation("SupportResponder")
+  notifications    Notification[]
+  groupMembers     GroupMember[]
 
   @@index([email])
   @@index([schoolId])
@@ -255,6 +266,7 @@ model Teacher {
   assignments       Assignment[]
   grades            Grade[]
   headOfDepartments Department[] @relation("DepartmentHead")
+  lessonPlans       LessonPlan[]
 
   @@unique([schoolId, employeeNumber])
   @@index([schoolId])
@@ -363,9 +375,10 @@ model Subject {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  school     School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  department Department? @relation(fields: [departmentId], references: [id])
-  classes    Class[]
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  department  Department?  @relation(fields: [departmentId], references: [id])
+  classes     Class[]
+  lessonPlans LessonPlan[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
@@ -403,6 +416,7 @@ model Class {
   students        ClassStudent[]
   assignments     Assignment[]
   attendance      Attendance[]
+  lessonPlans     LessonPlan[]
 
   @@index([schoolId])
   @@index([teacherId])
@@ -760,6 +774,32 @@ model TransportRoute {
 }
 
 // ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id           String   @id @default(uuid())
+  userId       String
+  title        String
+  message      String
+  type         String   @default("info") // info, success, warning, error
+  category     String   @default("system") // assignment, grade, attendance, announcement, message, system
+  isRead       Boolean  @default(false)
+  actionUrl    String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================
 // SYSTEM HEALTH SETTINGS
 // ============================================
 
@@ -774,6 +814,342 @@ model SystemHealthSettings {
   updatedAt     DateTime @updatedAt
 
   @@map("system_health_settings")
+}
+
+// ============================================
+// COMMUNICATION GROUPS
+// ============================================
+
+enum GroupType {
+  CLASS
+  SUBJECT
+  ACTIVITY
+  CUSTOM
+  ANNOUNCEMENT
+}
+
+enum GroupPrivacy {
+  PUBLIC
+  PRIVATE
+  RESTRICTED
+}
+
+model Group {
+  id          String        @id @default(uuid())
+  schoolId    String
+  name        String
+  description String?
+  type        GroupType     @default(CUSTOM)
+  privacy     GroupPrivacy  @default(PRIVATE)
+  createdBy   String // Admin ID
+  avatar      String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  school      School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  members     GroupMember[]
+  messages    GroupMessage[]
+  discussions Discussion[]
+  events      Event[]
+
+  @@index([schoolId])
+  @@index([type])
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  groupId   String
+  userId    String
+  role      String   @default("member") // admin, moderator, member
+  joinedAt  DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model GroupMessage {
+  id        String   @id @default(uuid())
+  groupId   String
+  senderId  String
+  content   String
+  isRead    Boolean  @default(false)
+  readCount Int      @default(0)
+  fileUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("group_messages")
+}
+
+// ============================================
+// DISCUSSION FORUMS
+// ============================================
+
+model Discussion {
+  id        String   @id @default(uuid())
+  groupId   String
+  title     String
+  content   String
+  createdBy String
+  isPinned  Boolean  @default(false)
+  isClosed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group   Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  replies Reply[]
+
+  @@index([groupId])
+  @@index([createdAt])
+  @@map("discussions")
+}
+
+model Reply {
+  id            String   @id @default(uuid())
+  discussionId  String
+  createdBy     String
+  content       String
+  parentReplyId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  parentReply Reply?     @relation("ReplyReplies", fields: [parentReplyId], references: [id])
+  childReplies Reply[]   @relation("ReplyReplies")
+
+  @@index([discussionId])
+  @@index([createdBy])
+  @@map("replies")
+}
+
+// ============================================
+// FILE SHARING
+// ============================================
+
+model FileUpload {
+  id        String   @id @default(uuid())
+  schoolId  String
+  uploadedBy String
+  fileName  String
+  fileType  String
+  fileSize  Int
+  fileUrl   String
+  groupId   String?
+  messageId String?
+  category  String   @default("general") // document, image, video, other
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([uploadedBy])
+  @@index([groupId])
+  @@map("file_uploads")
+}
+
+// ============================================
+// EVENTS & CALENDAR
+// ============================================
+
+model Event {
+  id          String   @id @default(uuid())
+  groupId     String
+  schoolId    String
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+  location    String?
+  createdBy   String
+  isAllDay    Boolean  @default(false)
+  eventType   String   @default("meeting") // meeting, deadline, event, holiday
+  banner      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group       Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  rsvps       EventRSVP[]
+  notifications EventNotification[]
+
+  @@index([groupId])
+  @@index([startDate])
+  @@map("events")
+}
+
+model EventRSVP {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  response  String   @default("pending") // pending, accepted, declined, tentative
+  respondedAt DateTime?
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@map("event_rsvps")
+}
+
+model EventNotification {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  notificationType String @default("reminder") // reminder, update, cancellation
+  sentAt    DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_notifications")
+}
+
+// ============================================
+// MESSAGE TEMPLATES
+// ============================================
+
+model MessageTemplate {
+  id          String   @id @default(uuid())
+  schoolId    String
+  createdBy   String
+  name        String
+  description String?
+  subject     String?
+  content     String
+  category    String   @default("general") // announcement, reminder, notification, other
+  variables   Json?    // Variables like {{name}}, {{date}}
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("message_templates")
+}
+
+// ============================================
+// SURVEYS & POLLS
+// ============================================
+
+model Survey {
+  id          String   @id @default(uuid())
+  groupId     String?
+  schoolId    String
+  createdBy   String
+  title       String
+  description String?
+  isAnonymous Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  questions SurveyQuestion[]
+
+  @@index([schoolId])
+  @@index([groupId])
+  @@map("surveys")
+}
+
+model SurveyQuestion {
+  id        String   @id @default(uuid())
+  surveyId  String
+  question  String
+  type      String   @default("text") // text, multipleChoice, rating, checkbox
+  options   Json?    // For multiple choice: ["Option 1", "Option 2"]
+  createdAt DateTime @default(now())
+
+  survey   Survey       @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  responses SurveyResponse[]
+
+  @@index([surveyId])
+  @@map("survey_questions")
+}
+
+model SurveyResponse {
+  id         String   @id @default(uuid())
+  questionId String
+  responderId String
+  response   String
+  createdAt  DateTime @default(now())
+
+  question SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("survey_responses")
+}
+
+// ============================================
+// LESSON PLANNING
+// ============================================
+
+enum LessonPlanStatus {
+  DRAFT
+  PUBLISHED
+  COMPLETED
+  ARCHIVED
+}
+
+enum ActivityType {
+  WARMUP
+  INSTRUCTION
+  PRACTICE
+  ASSESSMENT
+  CLOSURE
+  DISCUSSION
+  LABORATORY
+  FIELDWORK
+  PRESENTATION
+}
+
+model LessonPlan {
+  id          String           @id @default(uuid())
+  schoolId    String
+  teacherId   String
+  classId     String?
+  subjectId   String?
+  title       String
+  topic       String?
+  date        DateTime
+  duration    Int              // Duration in minutes
+  objectives  Json             // Array of learning objectives
+  materials   Json?            // Array of required materials
+  activities  Json             // Array of lesson activities with timings
+  assessment  String?          // Assessment method/description
+  homework    String?          // Homework assignment
+  notes       String?          // Additional notes
+  status      LessonPlanStatus @default(DRAFT)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  school  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher Teacher  @relation(fields: [teacherId], references: [id])
+  class   Class?   @relation(fields: [classId], references: [id])
+  subject Subject? @relation(fields: [subjectId], references: [id])
+
+  @@index([schoolId])
+  @@index([teacherId])
+  @@index([classId])
+  @@index([date])
+  @@index([status])
+  @@map("lesson_plans")
 }
 
 // ============================================

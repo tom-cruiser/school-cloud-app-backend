@@ -310,175 +310,211 @@ class GuardianService {
    * Get child's academic progress
    */
   async getChildAcademicProgress(userId, studentId) {
-    const guardian = await this.getGuardianByUserId(userId);
-    
-    const studentGuardian = guardian.students.find(
-      sg => sg.studentId === studentId
-    );
-
-    if (!studentGuardian) {
-      throw new NotFoundError('Student not found or not associated with this guardian');
-    }
-
-    const grades = await prisma.grade.findMany({
-      where: { studentId },
-      select: {
-        id: true,
-        score: true,
-        grade: true,
-        maxScore: true,
-        weightage: true,
-        createdAt: true,
-        subject: {
-          select: {
-            name: true,
-            code: true,
-          }
-        },
-        term: {
-          select: {
-            name: true,
-            startDate: true,
-            endDate: true,
-          }
-        },
-        assignment: {
-          select: {
-            title: true,
-            dueDate: true,
-          }
-        },
-      },
-      orderBy: {
-        createdAt: 'desc'
+    try {
+      const guardian = await this.getGuardianByUserId(userId);
+      
+      if (!guardian) {
+        throw new NotFoundError('Guardian profile not found for this user');
       }
-    });
+      
+      const studentGuardian = guardian.students.find(
+        sg => sg.studentId === studentId
+      );
 
-    return grades;
+      if (!studentGuardian) {
+        throw new NotFoundError('Student not found or not associated with this guardian');
+      }
+
+      const grades = await prisma.grade.findMany({
+        where: { studentId },
+        select: {
+          id: true,
+          score: true,
+          letterGrade: true,
+          subjectCode: true,
+          comments: true,
+          createdAt: true,
+          termRef: {
+            select: {
+              name: true,
+              startDate: true,
+              endDate: true,
+            }
+          },
+          teacher: {
+            select: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                }
+              }
+            }
+          },
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      return grades;
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      throw new ApiError('Failed to retrieve grades: ' + error.message);
+    }
   }
 
   /**
    * Get child's attendance records
    */
   async getChildAttendance(userId, studentId, filters = {}) {
-    const guardian = await this.getGuardianByUserId(userId);
-    
-    const studentGuardian = guardian.students.find(
-      sg => sg.studentId === studentId
-    );
+    try {
+      const guardian = await this.getGuardianByUserId(userId);
+      
+      if (!guardian) {
+        throw new NotFoundError('Guardian profile not found for this user');
+      }
+      
+      const studentGuardian = guardian.students.find(
+        sg => sg.studentId === studentId
+      );
 
-    if (!studentGuardian) {
-      throw new NotFoundError('Student not found or not associated with this guardian');
-    }
+      if (!studentGuardian) {
+        throw new NotFoundError('Student not found or not associated with this guardian');
+      }
 
-    const { startDate, endDate, status } = filters;
+      const { startDate, endDate, status } = filters;
 
-    const where = {
-      studentId,
-      ...(startDate && { date: { gte: new Date(startDate) } }),
-      ...(endDate && { date: { lte: new Date(endDate) } }),
-      ...(status && { status }),
-    };
+      const where = {
+        studentId,
+        ...(startDate && { date: { gte: new Date(startDate) } }),
+        ...(endDate && { date: { lte: new Date(endDate) } }),
+        ...(status && { status }),
+      };
 
-    const attendance = await prisma.attendance.findMany({
-      where,
-      select: {
-        id: true,
-        date: true,
-        status: true,
-        remarks: true,
-        class: {
-          select: {
-            name: true,
-            subject: {
-              select: {
-                name: true,
+      const attendance = await prisma.attendance.findMany({
+        where,
+        select: {
+          id: true,
+          date: true,
+          status: true,
+          remarks: true,
+          class: {
+            select: {
+              name: true,
+              subject: {
+                select: {
+                  name: true,
+                }
               }
             }
           }
+        },
+        orderBy: {
+          date: 'desc'
         }
-      },
-      orderBy: {
-        date: 'desc'
-      }
-    });
+      });
 
-    return attendance;
+      return attendance;
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      throw new ApiError('Failed to retrieve attendance: ' + error.message);
+    }
   }
 
   /**
    * Get child's assignments
    */
   async getChildAssignments(userId, studentId, filters = {}) {
-    const guardian = await this.getGuardianByUserId(userId);
-    
-    const studentGuardian = guardian.students.find(
-      sg => sg.studentId === studentId
-    );
+    try {
+      const guardian = await this.getGuardianByUserId(userId);
+      
+      if (!guardian) {
+        throw new NotFoundError('Guardian profile not found for this user');
+      }
+      
+      const studentGuardian = guardian.students.find(
+        sg => sg.studentId === studentId
+      );
 
-    if (!studentGuardian) {
-      throw new NotFoundError('Student not found or not associated with this guardian');
-    }
+      if (!studentGuardian) {
+        throw new NotFoundError('Student not found or not associated with this guardian');
+      }
 
-    const { status } = filters;
+      const { status } = filters;
 
-    // Get student's classes
-    const studentClasses = await prisma.classStudent.findMany({
-      where: { studentId },
-      select: { classId: true }
-    });
+      // Get student's classes
+      const studentClasses = await prisma.classStudent.findMany({
+        where: { studentId },
+        select: { classId: true }
+      });
 
-    const classIds = studentClasses.map(sc => sc.classId);
+      const classIds = studentClasses.map(sc => sc.classId);
 
-    const where = {
-      classId: { in: classIds },
-      ...(status && { status }),
-    };
+      // If student has no classes, return empty array
+      if (classIds.length === 0) {
+        return [];
+      }
 
-    const assignments = await prisma.assignment.findMany({
-      where,
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        dueDate: true,
-        status: true,
-        maxScore: true,
-        subject: {
-          select: {
-            name: true,
-          }
-        },
-        class: {
-          select: {
-            name: true,
-          }
-        },
-        submissions: {
-          where: { studentId },
-          select: {
-            id: true,
-            submittedAt: true,
-            status: true,
-            grade: {
-              select: {
-                score: true,
-                grade: true,
+      const where = {
+        classId: { in: classIds },
+      };
+
+      const assignments = await prisma.assignment.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          dueDate: true,
+          maxPoints: true,
+          createdAt: true,
+          class: {
+            select: {
+              name: true,
+            }
+          },
+          teacher: {
+            select: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                }
               }
             }
+          },
+          submissions: {
+            where: { studentId },
+            select: {
+              id: true,
+              submittedAt: true,
+              status: true,
+              score: true,
+              feedback: true,
+            }
           }
+        },
+        orderBy: {
+          dueDate: 'desc'
         }
-      },
-      orderBy: {
-        dueDate: 'desc'
-      }
-    });
+      });
 
-    return assignments.map(assignment => ({
-      ...assignment,
-      submission: assignment.submissions[0] || null,
-      submissions: undefined,
-    }));
+      return assignments.map(assignment => ({
+        ...assignment,
+        submission: assignment.submissions[0] || null,
+        submissions: undefined,
+      }));
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+      throw new ApiError('Failed to retrieve assignments: ' + error.message);
+    }
   }
 
   /**

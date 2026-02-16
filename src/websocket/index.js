@@ -72,8 +72,43 @@ class SocketIOServer {
     // Example: echo message back
     socket.emit('message', { echo: data });
   }
-}
 
-module.exports = new SocketIOServer();
+  /**
+   * Emit event to all users in a school
+   */
+  emitToSchool(schoolId, eventName, data) {
+    try {
+      if (!this.io) {
+        logger.warn('Socket.IO server not initialized, cannot emit event');
+        return;
+      }
+
+      // For now, emit to all connected clients since we don't have school-based rooms
+      // TODO: Implement proper room-based broadcasting by school
+      this.io.emit(eventName, { schoolId, ...data });
+      
+      logger.info(`Emitted event '${eventName}' to school ${schoolId} with data:`, data);
+    } catch (error) {
+      logger.error(`Failed to emit event '${eventName}' to school ${schoolId}:`, error);
+    }
+  }
+
+  /**
+   * Emit event to specific user
+   */
+  emitToUser(userId, eventName, data) {
+    try {
+      const socket = this.clients.get(userId);
+      if (socket) {
+        socket.emit(eventName, data);
+        logger.info(`Emitted event '${eventName}' to user ${userId}`);
+      } else {
+        logger.warn(`User ${userId} not connected, cannot emit event '${eventName}'`);
+      }
+    } catch (error) {
+      logger.error(`Failed to emit event '${eventName}' to user ${userId}:`, error);
+    }
+  }
+}
 
 module.exports = new SocketIOServer();

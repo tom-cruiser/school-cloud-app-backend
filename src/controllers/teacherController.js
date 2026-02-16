@@ -165,9 +165,13 @@ class TeacherController {
     const records = await teacherService.markAttendance(classId, date, attendance, teacherId, schoolId);
     
     // Emit WebSocket event if available
-    if (global.wsServer) {
-      const studentIds = attendance.map(a => a.studentId);
-      global.wsServer.sendAttendanceUpdate(studentIds, { classId, date, records });
+    if (global.wsServer?.emitToSchool) {
+      global.wsServer.emitToSchool(schoolId, 'attendance:marked', {
+        classId,
+        date,
+        records,
+        teacherId,
+      });
     }
 
     sendSuccess(res, records, 'Attendance marked successfully');
@@ -224,22 +228,35 @@ class TeacherController {
     const schoolId = req.user.schoolId;
     const { id } = req.params;
 
-    const assignment = await teacherService.updateAssignment(
-      id,
+    // Log the request data for debugging
+    console.log('Update assignment request:', {
+      assignmentId: id,
       teacherId,
       schoolId,
-      req.body
-    );
+      body: req.body
+    });
 
-    // Emit WebSocket event
-    if (global.wsServer) {
-      global.wsServer.emitToSchool(schoolId, 'assignmentUpdated', {
-        assignment,
+    try {
+      const assignment = await teacherService.updateAssignment(
+        id,
         teacherId,
-      });
-    }
+        schoolId,
+        req.body
+      );
 
-    sendSuccess(res, assignment, 'Assignment updated successfully');
+      // Emit WebSocket event
+      if (global.wsServer) {
+        global.wsServer.emitToSchool(schoolId, 'assignmentUpdated', {
+          assignment,
+          teacherId,
+        });
+      }
+
+      sendSuccess(res, assignment, 'Assignment updated successfully');
+    } catch (error) {
+      console.error('Assignment update error:', error);
+      throw error;
+    }
   });
 
   /**

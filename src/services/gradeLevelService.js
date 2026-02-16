@@ -10,7 +10,7 @@ exports.getAllGradeLevels = async (schoolId) => {
     orderBy: { sequence: 'asc' },
   });
 
-  return { data: gradeLevels };
+  return gradeLevels;
 };
 
 exports.createGradeLevel = async (data, schoolId) => {

@@ -40,6 +40,12 @@ class ConflictError extends AppError {
   }
 }
 
+class ApiError extends AppError {
+  constructor(message) {
+    super(message, 500);
+  }
+}
+
 const errorHandler = (err, req, res, next) => {
   let error = { ...err };
   error.message = err.message;
@@ -62,6 +68,23 @@ const errorHandler = (err, req, res, next) => {
   }
   if (err.code === 'P2025') {
     error = new NotFoundError('Record');
+  }
+  if (err.code === 'P2022') {
+    error = new AppError('Database schema is out of sync. Please run Prisma migrations.', 500);
+  }
+
+  // Multer upload errors
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      error = new ValidationError('Uploaded file is too large. Maximum size is 10MB.');
+    } else {
+      error = new ValidationError(err.message || 'Invalid file upload request');
+    }
+  }
+
+  // Generic bad request errors coming from middleware
+  if (err.statusCode === 400 && !(err instanceof AppError)) {
+    error = new ValidationError(err.message || 'Invalid request');
   }
 
   // JWT errors
@@ -93,6 +116,7 @@ module.exports = {
   AuthorizationError,
   NotFoundError,
   ConflictError,
+  ApiError,
   errorHandler,
   asyncHandler,
 };

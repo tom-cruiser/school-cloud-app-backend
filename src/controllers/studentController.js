@@ -20,7 +20,7 @@ class StudentController {
    */
   getStudents = asyncHandler(async (req, res) => {
     const schoolId = req.user.schoolId;
-    const { page, limit, search, grade } = req.query;
+    const { page, limit, search, grade, excludeGuardian } = req.query;
     const { skip, take } = getPagination(page, limit);
 
     const { students, total } = await studentService.getStudents(schoolId, {
@@ -28,6 +28,7 @@ class StudentController {
       take,
       search,
       grade,
+      excludeGuardian,
     });
 
     sendPaginatedResponse(res, students, page || 1, limit || 10, total, 'Students retrieved successfully');

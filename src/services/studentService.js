@@ -4,8 +4,31 @@ const prisma = require('../config/database');
 const { NotFoundError, ConflictError, ForbiddenError } = require('../utils/errors');
 const logger = require('../config/logger');
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 class StudentService {
+  isPdfBackgroundSupported(templatePath) {
+    if (!templatePath) return false;
+    const ext = path.extname(templatePath).toLowerCase();
+    return ['.png', '.jpg', '.jpeg', '.webp'].includes(ext);
+  }
+
+  resolveTemplatePath(templateUrl) {
+    if (!templateUrl || typeof templateUrl !== 'string') {
+      return null;
+    }
+
+    const normalizedPath = templateUrl.replace(/^\/+/, '');
+    const absolutePath = path.join(__dirname, '../../', normalizedPath);
+
+    if (!fs.existsSync(absolutePath)) {
+      return null;
+    }
+
+    return absolutePath;
+  }
+
   /**
    * Create a new student
    */
@@ -101,7 +124,7 @@ class StudentService {
   /**
    * Get all students for a school
    */
-  async getStudents(schoolId, { skip = 0, take = 10, search, grade }) {
+  async getStudents(schoolId, { skip = 0, take = 10, search, grade, excludeGuardian }) {
     const where = {
       schoolId,
       ...(search && {
@@ -113,6 +136,20 @@ class StudentService {
         ],
       }),
     };
+
+    // If excludeGuardian is provided, filter out students already linked to that guardian
+    if (excludeGuardian) {
+      const linkedStudentIds = await prisma.studentGuardian.findMany({
+        where: { guardianId: excludeGuardian },
+        select: { studentId: true },
+      });
+      
+      const linkedIds = linkedStudentIds.map(sg => sg.studentId);
+      
+      if (linkedIds.length > 0) {
+        where.id = { notIn: linkedIds };
+      }
+    }
 
     const [students, total] = await Promise.all([
       prisma.student.findMany({
@@ -149,6 +186,26 @@ class StudentService {
               id: true,
               routeName: true,
               routeNumber: true,
+            },
+          },
+          guardians: {
+            select: {
+              relationship: true,
+              isPrimary: true,
+              canPickup: true,
+              guardian: {
+                select: {
+                  id: true,
+                  user: {
+                    select: {
+                      firstName: true,
+                      lastName: true,
+                      email: true,
+                    },
+                  },
+                  phone: true,
+                },
+              },
             },
           },
         },
@@ -201,6 +258,26 @@ class StudentService {
             routeNumber: true,
           },
         },
+        guardians: {
+          select: {
+            relationship: true,
+            isPrimary: true,
+            canPickup: true,
+            guardian: {
+              select: {
+                id: true,
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+                phone: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -217,35 +294,83 @@ class StudentService {
   async updateStudent(studentId, schoolId, updateData) {
     // Verify student exists and belongs to school
     await this.getStudentById(studentId, schoolId);
-const { email, firstName, lastName, ...studentFields } = updateData;
+    const {
+      email, firstName, lastName, isActive, password,
+      gradeLevelId, houseId, transportRouteId,
+      dateOfBirth, enrollmentDate,
+      ...studentFields
+    } = updateData;
 
     const result = await prisma.$transaction(async (tx) => {
+      // Build student update data
+      const studentData = {
+        ...studentFields,
+        ...(dateOfBirth && { dateOfBirth: new Date(dateOfBirth) }),
+        ...(enrollmentDate && { enrollmentDate: new Date(enrollmentDate) }),
+        ...(gradeLevelId !== undefined && {
+          gradeLevel: gradeLevelId ? { connect: { id: gradeLevelId } } : { disconnect: true },
+        }),
+        ...(houseId !== undefined && {
+          house: houseId ? { connect: { id: houseId } } : { disconnect: true },
+        }),
+        ...(transportRouteId !== undefined && {
+          transportRoute: transportRouteId ? { connect: { id: transportRouteId } } : { disconnect: true },
+        }),
+      };
+
       // Update student profile
       const student = await tx.student.update({
         where: { id: studentId },
-        data: {
-          ...studentFields,
-          ...(updateData.dateOfBirth && { dateOfBirth: new Date(updateData.dateOfBirth) }),
-          ...(updateData.enrollmentDate && { enrollmentDate: new Date(updateData.enrollmentDate) }),
-        },
+        data: studentData,
         include: {
           user: true,
         },
       });
 
       // Update user fields if provided
-      if (email || firstName || lastName) {
+      if (email || firstName || lastName || isActive !== undefined || password) {
+        const userData = {
+          ...(email && { email }),
+          ...(firstName && { firstName }),
+          ...(lastName && { lastName }),
+          ...(isActive !== undefined && { isActive }),
+        };
+
+        if (password && password.trim()) {
+          userData.password = await bcrypt.hash(password, config.bcryptRounds);
+        }
+
         await tx.user.update({
           where: { id: student.userId },
-          data: {
-            ...(email && { email }),
-            ...(firstName && { firstName }),
-            ...(lastName && { lastName }),
-          },
+          data: userData,
         });
       }
 
-      return student;
+      // Fetch updated student with user data
+      const updatedStudent = await tx.student.findUnique({
+        where: { id: studentId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              isActive: true,
+              lastLogin: true,
+            },
+          },
+          gradeLevel: {
+            select: {
+              id: true,
+              name: true,
+              level: true,
+            },
+          },
+        },
+      });
+
+      return updatedStudent;
     });
 
     logger.info(`Student updated: ${studentId}`);
@@ -391,6 +516,8 @@ const { email, firstName, lastName, ...studentFields } = updateData;
         name: school.name,
         logo: school.logo,
         address: school.address,
+        reportTemplateModel: school.reportTemplateModel || null,
+        reportTemplateFileUrl: school.reportTemplateFileUrl || null,
       },
       grades,
       statistics: {
@@ -419,6 +546,35 @@ const { email, firstName, lastName, ...studentFields } = updateData;
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
+
+        const reportTemplatePath = this.resolveTemplatePath(reportCard.school?.reportTemplateFileUrl);
+        const applyReportTemplateBackground = () => {
+          if (!reportTemplatePath) return;
+
+          if (!this.isPdfBackgroundSupported(reportTemplatePath)) {
+            logger.info('Report template file format is not supported as PDF background, skipping image render', {
+              studentId,
+              schoolId,
+              templateFileUrl: reportCard.school?.reportTemplateFileUrl,
+            });
+            return;
+          }
+
+          try {
+            doc.image(reportTemplatePath, 0, 0, {
+              fit: [doc.page.width, doc.page.height],
+            });
+          } catch (error) {
+            logger.warn('Failed to render report template background', {
+              studentId,
+              schoolId,
+              error: error.message,
+            });
+          }
+        };
+
+        applyReportTemplateBackground();
+        doc.on('pageAdded', applyReportTemplateBackground);
 
         // Header
         doc.fontSize(24).font('Helvetica-Bold').text(reportCard.school.name, { align: 'center' });
@@ -533,6 +689,8 @@ const { email, firstName, lastName, ...studentFields } = updateData;
         address: school.address,
         phone: school.phone,
         email: school.email,
+        idCardTemplateModel: school.idCardTemplateModel || null,
+        idCardTemplateFileUrl: school.idCardTemplateFileUrl || null,
       },
       issuedAt: new Date().toISOString(),
     };
@@ -555,6 +713,29 @@ const { email, firstName, lastName, ...studentFields } = updateData;
         doc.on('data', (chunk) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
+
+        const idCardTemplatePath = this.resolveTemplatePath(idCard.school?.idCardTemplateFileUrl);
+        if (idCardTemplatePath) {
+          if (!this.isPdfBackgroundSupported(idCardTemplatePath)) {
+            logger.info('ID card template file format is not supported as PDF background, skipping image render', {
+              studentId,
+              schoolId,
+              templateFileUrl: idCard.school?.idCardTemplateFileUrl,
+            });
+          } else {
+          try {
+            doc.image(idCardTemplatePath, 0, 0, {
+              fit: [252, 400],
+            });
+          } catch (error) {
+            logger.warn('Failed to render ID card template background', {
+              studentId,
+              schoolId,
+              error: error.message,
+            });
+          }
+          }
+        }
 
         // Background color
         doc.rect(0, 0, 252, 100).fill('#3B82F6');
@@ -830,7 +1011,16 @@ const { email, firstName, lastName, ...studentFields } = updateData;
    * Update my profile (for logged-in student)
    */
   async updateMyProfile(userId, updateData) {
-    const { guardianName, guardianPhone, guardianEmail, address } = updateData;
+    const {
+      firstName,
+      lastName,
+      dateOfBirth,
+      gender,
+      guardianName,
+      guardianPhone,
+      guardianEmail,
+      address,
+    } = updateData;
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -841,26 +1031,40 @@ const { email, firstName, lastName, ...studentFields } = updateData;
       throw new NotFoundError('Student profile not found');
     }
 
-    const updatedStudent = await prisma.student.update({
-      where: { id: user.student.id },
-      data: {
-        guardianName,
-        guardianPhone,
-        guardianEmail,
-        address,
-      },
-      include: {
-        user: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
+    const updatedStudent = await prisma.$transaction(async (tx) => {
+      if (firstName || lastName) {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            ...(firstName ? { firstName } : {}),
+            ...(lastName ? { lastName } : {}),
           },
+        });
+      }
+
+      return tx.student.update({
+        where: { id: user.student.id },
+        data: {
+          ...(guardianName !== undefined ? { guardianName } : {}),
+          ...(guardianPhone !== undefined ? { guardianPhone } : {}),
+          ...(guardianEmail !== undefined ? { guardianEmail } : {}),
+          ...(address !== undefined ? { address } : {}),
+          ...(dateOfBirth ? { dateOfBirth: new Date(dateOfBirth) } : {}),
+          ...(gender !== undefined ? { gender } : {}),
         },
-        gradeLevel: true,
-        house: true,
-        transportRoute: true,
-      },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          gradeLevel: true,
+          house: true,
+          transportRoute: true,
+        },
+      });
     });
 
     logger.info(`Student profile updated: ${user.student.id}`);
@@ -877,7 +1081,7 @@ const { email, firstName, lastName, ...studentFields } = updateData;
         schoolId,
         students: {
           some: {
-            id: studentId,
+            studentId,
           },
         },
       },
@@ -914,20 +1118,30 @@ const { email, firstName, lastName, ...studentFields } = updateData;
    * Get assignments for student
    */
   async getMyAssignments(studentId, schoolId, filters = {}) {
+    logger.info(`Getting assignments for student ${studentId} in school ${schoolId}`);
+    
     // Get student's classes
     const studentClasses = await prisma.class.findMany({
       where: {
         schoolId,
         students: {
           some: {
-            id: studentId,
+            studentId,
           },
         },
       },
       select: {
         id: true,
+        name: true,
       },
     });
+
+    logger.info(`Found ${studentClasses.length} classes for student ${studentId}:`, studentClasses);
+
+    if (studentClasses.length === 0) {
+      logger.warn(`Student ${studentId} is not enrolled in any classes`);
+      return [];
+    }
 
     const classIds = studentClasses.map((c) => c.id);
 
@@ -977,6 +1191,8 @@ const { email, firstName, lastName, ...studentFields } = updateData;
       },
     });
 
+    logger.info(`Found ${assignments.length} assignments for student ${studentId}`);
+
     return assignments.map((assignment) => ({
       ...assignment,
       isSubmitted: assignment.submissions.length > 0,
@@ -998,7 +1214,7 @@ const { email, firstName, lastName, ...studentFields } = updateData;
           include: {
             students: {
               where: {
-                id: studentId,
+                studentId,
               },
             },
           },
@@ -1135,19 +1351,24 @@ const { email, firstName, lastName, ...studentFields } = updateData;
     }
 
     if (filters.startDate && filters.endDate) {
+      const endDate = new Date(filters.endDate);
+      endDate.setHours(23, 59, 59, 999);
+
       where.date = {
         gte: new Date(filters.startDate),
-        lte: new Date(filters.endDate),
+        lte: endDate,
       };
     } else if (filters.month) {
       // Get records for specific month
-      const [year, month] = filters.month.split('-');
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0);
-      where.date = {
-        gte: startDate,
-        lte: endDate,
-      };
+      const [year, month] = filters.month.split('-').map(Number);
+      if (!Number.isNaN(year) && !Number.isNaN(month) && month >= 1 && month <= 12) {
+        const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        where.date = {
+          gte: startDate,
+          lte: endDate,
+        };
+      }
     }
 
     const attendanceRecords = await prisma.attendance.findMany({

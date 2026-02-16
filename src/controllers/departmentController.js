@@ -3,11 +3,19 @@ const { sendSuccess } = require('../utils/helpers');
 
 exports.getAllDepartments = async (req, res, next) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page, limit } = req.query;
+    
+    // If no pagination params, return simple list
+    if (!page && !limit) {
+      const result = await departmentService.getAllDepartmentsSimple(req.user.schoolId);
+      return sendSuccess(res, result, 'Departments retrieved successfully');
+    }
+    
+    // Otherwise return paginated results
     const result = await departmentService.getAllDepartments(
       req.user.schoolId,
-      parseInt(page),
-      parseInt(limit)
+      parseInt(page) || 1,
+      parseInt(limit) || 50
     );
     return sendSuccess(res, result, 'Departments retrieved successfully');
   } catch (error) {

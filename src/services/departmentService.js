@@ -45,6 +45,24 @@ exports.getAllDepartments = async (schoolId, page, limit) => {
   };
 };
 
+// Simple method without pagination for dropdowns
+exports.getAllDepartmentsSimple = async (schoolId) => {
+  const departments = await prisma.department.findMany({
+    where: { schoolId },
+    include: {
+      _count: {
+        select: {
+          teachers: true,
+          subjects: true,
+        },
+      },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  return departments;
+};
+
 exports.getDepartmentById = async (id, schoolId) => {
   const department = await prisma.department.findFirst({
     where: { id, schoolId },

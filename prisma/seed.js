@@ -312,6 +312,48 @@ async function main() {
 
   logger.info(`Student created: ${studentUser.email}`);
 
+  // Create Guardian
+  const guardianPassword = await bcrypt.hash('password123', config.bcryptRounds);
+  const guardianUser = await prisma.user.upsert({
+    where: { email: 'guardian@school1.com' },
+    update: {},
+    create: {
+      email: 'guardian@school1.com',
+      password: guardianPassword,
+      firstName: 'John',
+      lastName: 'Guardian',
+      role: 'GUARDIAN',
+      schoolId: school.id,
+    },
+  });
+
+  const guardian = await prisma.guardian.upsert({
+    where: { userId: guardianUser.id },
+    update: {},
+    create: {
+      userId: guardianUser.id,
+      schoolId: school.id,
+      phone: '+1234567890',
+      occupation: 'Parent',
+      emergencyContact: '+1234567890',
+    },
+  });
+
+  // Link guardian to student
+  await prisma.studentGuardian.upsert({
+    where: { studentId_guardianId: { studentId: student.id, guardianId: guardian.id } },
+    update: {},
+    create: {
+      studentId: student.id,
+      guardianId: guardian.id,
+      relationship: 'Parent',
+      isPrimary: true,
+      canPickup: true,
+    },
+  });
+
+  logger.info(`Guardian created: ${guardianUser.email}`);
+
   // Create a subject
   const subject = await prisma.subject.upsert({
     where: { schoolId_code: { schoolId: school.id, code: 'MATH101' } },

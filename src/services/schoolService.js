@@ -237,6 +237,56 @@ class SchoolService {
 
     return admin;
   }
+
+  /**
+   * Get school template settings
+   */
+  async getSchoolTemplateSettings(schoolId) {
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: {
+        id: true,
+        reportTemplateModel: true,
+        idCardTemplateModel: true,
+        reportTemplateFileUrl: true,
+        idCardTemplateFileUrl: true,
+      },
+    });
+
+    if (!school) {
+      throw new NotFoundError('School');
+    }
+
+    return school;
+  }
+
+  /**
+   * Update school template settings
+   */
+  async updateSchoolTemplateSettings(schoolId, templateData) {
+    await this.getSchoolById(schoolId);
+
+    const updatedSchool = await prisma.school.update({
+      where: { id: schoolId },
+      data: cleanObject({
+        reportTemplateModel: templateData.reportTemplateModel,
+        idCardTemplateModel: templateData.idCardTemplateModel,
+        reportTemplateFileUrl: templateData.reportTemplateFileUrl,
+        idCardTemplateFileUrl: templateData.idCardTemplateFileUrl,
+      }),
+      select: {
+        id: true,
+        reportTemplateModel: true,
+        idCardTemplateModel: true,
+        reportTemplateFileUrl: true,
+        idCardTemplateFileUrl: true,
+      },
+    });
+
+    logger.info(`School template settings updated: ${schoolId}`);
+
+    return updatedSchool;
+  }
 }
 
 module.exports = new SchoolService();

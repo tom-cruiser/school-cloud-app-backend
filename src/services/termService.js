@@ -8,7 +8,7 @@ exports.getAllTerms = async (schoolId) => {
     orderBy: { startDate: 'desc' },
   });
 
-  return { data: terms };
+  return terms;
 };
 
 exports.createTerm = async (data, schoolId) => {
