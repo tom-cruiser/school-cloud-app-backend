@@ -1,8 +1,8 @@
-const bcrypt = require('bcrypt');
-const config = require('../config');
-const prisma = require('../config/database');
-const { NotFoundError, ConflictError } = require('../utils/errors');
-const logger = require('../config/logger');
+const bcrypt = require("bcrypt");
+const config = require("../config");
+const prisma = require("../config/database");
+const { NotFoundError, ConflictError } = require("../utils/errors");
+const logger = require("../config/logger");
 
 class TeacherService {
   /**
@@ -26,7 +26,7 @@ class TeacherService {
     });
 
     if (existingUser) {
-      throw new ConflictError('User with this email already exists');
+      throw new ConflictError("User with this email already exists");
     }
 
     // Hash password
@@ -41,7 +41,7 @@ class TeacherService {
           password: hashedPassword,
           firstName,
           lastName,
-          role: 'TEACHER',
+          role: "TEACHER",
           schoolId,
           isActive: true,
         },
@@ -94,10 +94,10 @@ class TeacherService {
       schoolId,
       ...(search && {
         OR: [
-          { user: { firstName: { contains: search, mode: 'insensitive' } } },
-          { user: { lastName: { contains: search, mode: 'insensitive' } } },
-          { user: { email: { contains: search, mode: 'insensitive' } } },
-          { employeeNumber: { contains: search, mode: 'insensitive' } },
+          { user: { firstName: { contains: search, mode: "insensitive" } } },
+          { user: { lastName: { contains: search, mode: "insensitive" } } },
+          { user: { email: { contains: search, mode: "insensitive" } } },
+          { employeeNumber: { contains: search, mode: "insensitive" } },
         ],
       }),
       ...(departmentId && { departmentId }),
@@ -127,7 +127,7 @@ class TeacherService {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       prisma.teacher.count({ where }),
     ]);
@@ -166,7 +166,7 @@ class TeacherService {
     });
 
     if (!teacher) {
-      throw new NotFoundError('Teacher not found');
+      throw new NotFoundError("Teacher not found");
     }
 
     return teacher;
@@ -311,7 +311,7 @@ class TeacherService {
 
     // Calculate average attendance
     const attendanceStats = await prisma.attendance.groupBy({
-      by: ['status'],
+      by: ["status"],
       where: {
         class: {
           teacherId,
@@ -323,14 +323,21 @@ class TeacherService {
       _count: true,
     });
 
-    const totalAttendance = attendanceStats.reduce((sum, stat) => sum + stat._count, 0);
-    const presentCount = attendanceStats.find(s => s.status === 'PRESENT')?._count || 0;
-    const avgAttendance = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 0;
+    const totalAttendance = attendanceStats.reduce(
+      (sum, stat) => sum + stat._count,
+      0,
+    );
+    const presentCount =
+      attendanceStats.find((s) => s.status === "PRESENT")?._count || 0;
+    const avgAttendance =
+      totalAttendance > 0
+        ? Math.round((presentCount / totalAttendance) * 100)
+        : 0;
 
     // Get today's schedule
     const today = new Date();
     const dayOfWeek = today.getDay();
-    
+
     // Note: classSchedule table doesn't exist, using empty array
     let todaySchedule = [];
     try {
@@ -354,7 +361,7 @@ class TeacherService {
       //   },
       // });
     } catch (error) {
-      console.warn('Failed to fetch today\'s schedule:', error.message);
+      console.warn("Failed to fetch today's schedule:", error.message);
       todaySchedule = [];
     }
 
@@ -381,7 +388,7 @@ class TeacherService {
         },
       },
       orderBy: {
-        submittedAt: 'asc',
+        submittedAt: "asc",
       },
       take: 10,
     });
@@ -407,13 +414,13 @@ class TeacherService {
         },
       },
       orderBy: {
-        dueDate: 'asc',
+        dueDate: "asc",
       },
     });
 
     // Get recent activities (last 20)
     const recentActivities = [];
-    
+
     // Recent submissions
     const recentSubmissions = await prisma.assignmentSubmission.findMany({
       where: {
@@ -432,15 +439,15 @@ class TeacherService {
         assignment: true,
       },
       orderBy: {
-        submittedAt: 'desc',
+        submittedAt: "desc",
       },
       take: 10,
     });
 
-    recentSubmissions.forEach(sub => {
+    recentSubmissions.forEach((sub) => {
       recentActivities.push({
         id: `sub-${sub.id}`,
-        type: 'submission',
+        type: "submission",
         description: `New submission from ${sub.student.user.firstName} ${sub.student.user.lastName}`,
         timestamp: this.getRelativeTime(sub.submittedAt),
       });
@@ -452,37 +459,41 @@ class TeacherService {
       totalStudents,
       pendingGrades,
       avgAttendance,
-      todaySchedule: todaySchedule.map(schedule => ({
+      todaySchedule: todaySchedule.map((schedule) => ({
         id: schedule.id,
         className: schedule.class.name,
         startTime: schedule.startTime,
         endTime: schedule.endTime,
-        room: schedule.room || 'TBA',
+        room: schedule.room || "TBA",
         studentCount: schedule.class.students.length,
         status: this.getClassStatus(schedule.startTime, schedule.endTime),
       })),
-      pendingGrading: pendingGrading.map(item => ({
+      pendingGrading: pendingGrading.map((item) => ({
         id: item.id,
         studentName: `${item.student.user.firstName} ${item.student.user.lastName}`,
         assignmentTitle: item.assignment.title,
         className: item.assignment.class.name,
         submittedAt: item.submittedAt.toISOString(),
-        daysOverdue: Math.floor((new Date() - new Date(item.submittedAt)) / (1000 * 60 * 60 * 24)),
+        daysOverdue: Math.floor(
+          (new Date() - new Date(item.submittedAt)) / (1000 * 60 * 60 * 24),
+        ),
       })),
-      upcomingAssignments: upcomingAssignments.map(assignment => ({
+      upcomingAssignments: upcomingAssignments.map((assignment) => ({
         id: assignment.id,
         title: assignment.title,
         className: assignment.class.name,
-        dueDate: assignment.dueDate.toISOString().split('T')[0],
+        dueDate: assignment.dueDate.toISOString().split("T")[0],
         submittedCount: assignment._count.submissions,
-        totalStudents: classes.find(c => c.id === assignment.classId)?.students.length || 0,
+        totalStudents:
+          classes.find((c) => c.id === assignment.classId)?.students.length ||
+          0,
       })),
       recentActivities: recentActivities.slice(0, 20),
-      classes: classes.map(cls => ({
+      classes: classes.map((cls) => ({
         id: cls.id,
         name: cls.name,
         studentCount: cls.students.length,
-        schedule: cls.gradeLevel ? `${cls.gradeLevel.name}` : 'N/A',
+        schedule: cls.gradeLevel ? `${cls.gradeLevel.name}` : "N/A",
         avgGrade: 0, // Calculate if needed
         attendanceRate: 95, // Calculate if needed
       })),
@@ -517,7 +528,7 @@ class TeacherService {
     });
 
     if (!teacher) {
-      throw new NotFoundError('Teacher profile not found');
+      throw new NotFoundError("Teacher profile not found");
     }
 
     return {
@@ -545,10 +556,11 @@ class TeacherService {
     });
 
     if (!teacher) {
-      throw new NotFoundError('Teacher profile not found');
+      throw new NotFoundError("Teacher profile not found");
     }
 
-    const { firstName, lastName, phone, bio, profileImage, ...teacherFields } = updateData;
+    const { firstName, lastName, phone, bio, profileImage, ...teacherFields } =
+      updateData;
 
     const result = await prisma.$transaction(async (tx) => {
       // Update user info
@@ -604,20 +616,20 @@ class TeacherService {
         subject: true,
       },
       orderBy: {
-        name: 'asc',
+        name: "asc",
       },
     });
 
-    return classes.map(cls => ({
+    return classes.map((cls) => ({
       id: cls.id,
       name: cls.name,
       code: cls.code,
-      gradeLevel: cls.gradeLevel?.name || 'N/A',
+      gradeLevel: cls.gradeLevel?.name || "N/A",
       section: cls.section,
       studentCount: cls.students.length,
-      subject: cls.subject?.name || 'N/A',
-      schedule: 'Mon, Wed, Fri', // Need to calculate from schedules
-      room: 'Room 101', // Need to get from schedules
+      subject: cls.subject?.name || "N/A",
+      schedule: "Mon, Wed, Fri", // Need to calculate from schedules
+      room: "Room 101", // Need to get from schedules
     }));
   }
 
@@ -634,7 +646,7 @@ class TeacherService {
     });
 
     if (!classData) {
-      throw new NotFoundError('Class not found or unauthorized');
+      throw new NotFoundError("Class not found or unauthorized");
     }
 
     const classStudents = await prisma.classStudent.findMany({
@@ -656,15 +668,15 @@ class TeacherService {
         },
       },
       orderBy: {
-        enrolledAt: 'asc',
+        enrolledAt: "asc",
       },
     });
 
     return classStudents.map((classStudent) => ({
       id: classStudent.studentId,
-      firstName: classStudent.student?.user?.firstName || '',
-      lastName: classStudent.student?.user?.lastName || '',
-      rollNumber: classStudent.student?.studentNumber || '-',
+      firstName: classStudent.student?.user?.firstName || "",
+      lastName: classStudent.student?.user?.lastName || "",
+      rollNumber: classStudent.student?.studentNumber || "-",
       email: classStudent.student?.user?.email || null,
       profileImage: classStudent.student?.user?.avatar || null,
     }));
@@ -694,11 +706,11 @@ class TeacherService {
     });
 
     if (!classData) {
-      throw new NotFoundError('Class not found or unauthorized');
+      throw new NotFoundError("Class not found or unauthorized");
     }
 
     const attendanceDate = new Date(date);
-    
+
     const attendanceRecords = await prisma.attendance.findMany({
       where: {
         classId,
@@ -709,15 +721,17 @@ class TeacherService {
       },
     });
 
-    return classData.students.map(classStudent => {
-      const record = attendanceRecords.find(r => r.studentId === classStudent.studentId);
+    return classData.students.map((classStudent) => {
+      const record = attendanceRecords.find(
+        (r) => r.studentId === classStudent.studentId,
+      );
       return {
         id: record?.id || null,
         studentId: classStudent.studentId,
         studentName: `${classStudent.student.user.firstName} ${classStudent.student.user.lastName}`,
         rollNumber: classStudent.student.studentNumber,
         status: record?.status?.toLowerCase() || null,
-        notes: record?.remarks || '',
+        notes: record?.remarks || "",
       };
     });
   }
@@ -735,7 +749,7 @@ class TeacherService {
     });
 
     if (!classData) {
-      throw new NotFoundError('Class not found or unauthorized');
+      throw new NotFoundError("Class not found or unauthorized");
     }
 
     const attendanceDate = new Date(date);
@@ -764,7 +778,7 @@ class TeacherService {
             remarks: record.notes || null,
           },
         });
-      })
+      }),
     );
 
     logger.info(`Attendance marked for class ${classId} on ${date}`);
@@ -788,9 +802,9 @@ class TeacherService {
 
     if (filters.status) {
       const now = new Date();
-      if (filters.status === 'upcoming') {
+      if (filters.status === "upcoming") {
         where.dueDate = { gte: now };
-      } else if (filters.status === 'overdue') {
+      } else if (filters.status === "overdue") {
         where.dueDate = { lt: now };
       }
     }
@@ -820,7 +834,7 @@ class TeacherService {
         },
       },
       orderBy: {
-        dueDate: 'asc',
+        dueDate: "asc",
       },
     });
 
@@ -828,10 +842,10 @@ class TeacherService {
     return assignments.map((assignment) => {
       const totalStudents = assignment.class.students?.length || 0;
       const submittedCount = assignment.submissions.filter(
-        (s) => s.status === 'SUBMITTED' || s.status === 'GRADED'
+        (s) => s.status === "SUBMITTED" || s.status === "GRADED",
       ).length;
       const gradedCount = assignment.submissions.filter(
-        (s) => s.status === 'GRADED'
+        (s) => s.status === "GRADED",
       ).length;
 
       return {
@@ -867,7 +881,7 @@ class TeacherService {
     });
 
     if (!classExists) {
-      throw new NotFoundError('Class not found or you do not have access');
+      throw new NotFoundError("Class not found or you do not have access");
     }
 
     const assignment = await prisma.assignment.create({
@@ -892,7 +906,7 @@ class TeacherService {
     });
 
     logger.info(
-      `Assignment created: ${assignment.id} for class ${classId} by teacher ${teacherId}`
+      `Assignment created: ${assignment.id} for class ${classId} by teacher ${teacherId}`,
     );
 
     return assignment;
@@ -903,11 +917,11 @@ class TeacherService {
    */
   async updateAssignment(assignmentId, teacherId, schoolId, updateData) {
     try {
-      console.log('TeacherService.updateAssignment called with:', {
+      console.log("TeacherService.updateAssignment called with:", {
         assignmentId,
         teacherId,
         schoolId,
-        updateData
+        updateData,
       });
 
       // Verify assignment exists
@@ -917,11 +931,11 @@ class TeacherService {
         },
       });
 
-      console.log('Assignment exists check:', existingAssignment);
+      console.log("Assignment exists check:", existingAssignment);
 
       if (!existingAssignment) {
-        console.log('Assignment not found with ID:', assignmentId);
-        throw new NotFoundError('Assignment not found');
+        console.log("Assignment not found with ID:", assignmentId);
+        throw new NotFoundError("Assignment not found");
       }
 
       // Verify teacher owns this assignment
@@ -933,23 +947,34 @@ class TeacherService {
         },
       });
 
-      console.log('Teacher ownership check:', teacherAssignment);
+      console.log("Teacher ownership check:", teacherAssignment);
 
       if (!teacherAssignment) {
-        console.log('Teacher does not have access to assignment:', { assignmentId, teacherId, schoolId });
-        throw new NotFoundError('Assignment not found or you do not have access');
+        console.log("Teacher does not have access to assignment:", {
+          assignmentId,
+          teacherId,
+          schoolId,
+        });
+        throw new NotFoundError(
+          "Assignment not found or you do not have access",
+        );
       }
 
       // Prepare update data, excluding undefined values
       const updateFields = {};
       if (updateData.title !== undefined) updateFields.title = updateData.title;
-      if (updateData.description !== undefined) updateFields.description = updateData.description;
-      if (updateData.classId !== undefined) updateFields.classId = updateData.classId;
-      if (updateData.maxPoints !== undefined) updateFields.maxPoints = parseInt(updateData.maxPoints);
-      if (updateData.attachments !== undefined) updateFields.attachments = updateData.attachments || null;
-      if (updateData.dueDate !== undefined) updateFields.dueDate = new Date(updateData.dueDate);
+      if (updateData.description !== undefined)
+        updateFields.description = updateData.description;
+      if (updateData.classId !== undefined)
+        updateFields.classId = updateData.classId;
+      if (updateData.maxPoints !== undefined)
+        updateFields.maxPoints = parseInt(updateData.maxPoints);
+      if (updateData.attachments !== undefined)
+        updateFields.attachments = updateData.attachments || null;
+      if (updateData.dueDate !== undefined)
+        updateFields.dueDate = new Date(updateData.dueDate);
 
-      console.log('Update fields:', updateFields);
+      console.log("Update fields:", updateFields);
 
       const updated = await prisma.assignment.update({
         where: { id: assignmentId },
@@ -964,13 +989,15 @@ class TeacherService {
         },
       });
 
-      console.log('Assignment updated successfully:', updated.id);
+      console.log("Assignment updated successfully:", updated.id);
 
-      logger.info(`Assignment updated: ${assignmentId} by teacher ${teacherId}`);
+      logger.info(
+        `Assignment updated: ${assignmentId} by teacher ${teacherId}`,
+      );
 
       return updated;
     } catch (error) {
-      console.error('TeacherService.updateAssignment error:', error);
+      console.error("TeacherService.updateAssignment error:", error);
       throw error;
     }
   }
@@ -980,10 +1007,10 @@ class TeacherService {
    */
   async deleteAssignment(assignmentId, teacherId, schoolId) {
     try {
-      console.log('TeacherService.deleteAssignment called with:', {
+      console.log("TeacherService.deleteAssignment called with:", {
         assignmentId,
         teacherId,
-        schoolId
+        schoolId,
       });
 
       // Verify teacher owns this assignment
@@ -995,10 +1022,12 @@ class TeacherService {
         },
       });
 
-      console.log('Found assignment for deletion:', assignment);
+      console.log("Found assignment for deletion:", assignment);
 
       if (!assignment) {
-        throw new NotFoundError('Assignment not found or you do not have access');
+        throw new NotFoundError(
+          "Assignment not found or you do not have access",
+        );
       }
 
       // Delete related submissions first to avoid foreign key constraints
@@ -1006,19 +1035,23 @@ class TeacherService {
         where: { assignmentId },
       });
 
-      console.log(`Deleted ${deletedSubmissions.count} submissions for assignment ${assignmentId}`);
+      console.log(
+        `Deleted ${deletedSubmissions.count} submissions for assignment ${assignmentId}`,
+      );
 
       const deletedAssignment = await prisma.assignment.delete({
         where: { id: assignmentId },
       });
 
-      console.log('Assignment deleted successfully:', deletedAssignment);
+      console.log("Assignment deleted successfully:", deletedAssignment);
 
-      logger.info(`Assignment deleted: ${assignmentId} by teacher ${teacherId}`);
+      logger.info(
+        `Assignment deleted: ${assignmentId} by teacher ${teacherId}`,
+      );
 
-      return { message: 'Assignment deleted successfully' };
+      return { message: "Assignment deleted successfully" };
     } catch (error) {
-      console.error('TeacherService.deleteAssignment error:', error);
+      console.error("TeacherService.deleteAssignment error:", error);
       throw error;
     }
   }
@@ -1028,10 +1061,10 @@ class TeacherService {
    */
   async getSubmissions(assignmentId, teacherId, schoolId) {
     try {
-      console.log('TeacherService.getSubmissions called with:', {
+      console.log("TeacherService.getSubmissions called with:", {
         assignmentId,
         teacherId,
-        schoolId
+        schoolId,
       });
 
       // Verify teacher owns this assignment
@@ -1060,81 +1093,84 @@ class TeacherService {
         },
       });
 
-      console.log('Found assignment for submissions:', assignment ? assignment.id : 'null');
+      console.log(
+        "Found assignment for submissions:",
+        assignment ? assignment.id : "null",
+      );
 
       if (!assignment) {
-        throw new NotFoundError('Assignment not found or you do not have access');
+        throw new NotFoundError(
+          "Assignment not found or you do not have access",
+        );
       }
 
-    // Get all submissions
-    const submissions = await prisma.assignmentSubmission.findMany({
-      where: {
-        assignmentId,
-      },
-      include: {
-        student: {
-          include: {
-            user: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
+      // Get all submissions
+      const submissions = await prisma.assignmentSubmission.findMany({
+        where: {
+          assignmentId,
+        },
+        include: {
+          student: {
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        submittedAt: 'desc',
-      },
-    });
+        orderBy: {
+          submittedAt: "desc",
+        },
+      });
 
-    // Create a map of submissions by studentId
-    const submissionMap = new Map(
-      submissions.map((s) => [s.studentId, s])
-    );
+      // Create a map of submissions by studentId
+      const submissionMap = new Map(submissions.map((s) => [s.studentId, s]));
 
-    // Generate full list including students who haven't submitted
-    const allSubmissions = assignment.class.students.map((student) => {
-      const submission = submissionMap.get(student.id);
-      if (submission) {
-        return submission;
-      }
+      // Generate full list including students who haven't submitted
+      const allSubmissions = assignment.class.students.map((student) => {
+        const submission = submissionMap.get(student.id);
+        if (submission) {
+          return submission;
+        }
 
-      // No submission yet - return placeholder
+        // No submission yet - return placeholder
+        return {
+          id: null,
+          assignmentId,
+          studentId: student.id,
+          student,
+          status: "PENDING",
+          submittedAt: null,
+          content: null,
+          attachments: null,
+          score: null,
+          feedback: null,
+          gradedAt: null,
+        };
+      });
+
       return {
-        id: null,
-        assignmentId,
-        studentId: student.id,
-        student,
-        status: 'PENDING',
-        submittedAt: null,
-        content: null,
-        attachments: null,
-        score: null,
-        feedback: null,
-        gradedAt: null,
+        assignment: {
+          id: assignment.id,
+          title: assignment.title,
+          description: assignment.description,
+          dueDate: assignment.dueDate,
+          maxPoints: assignment.maxPoints,
+        },
+        submissions: allSubmissions,
+        stats: {
+          total: allSubmissions.length,
+          submitted: submissions.length,
+          pending: allSubmissions.length - submissions.length,
+          graded: submissions.filter((s) => s.status === "GRADED").length,
+        },
       };
-    });
-
-    return {
-      assignment: {
-        id: assignment.id,
-        title: assignment.title,
-        description: assignment.description,
-        dueDate: assignment.dueDate,
-        maxPoints: assignment.maxPoints,
-      },
-      submissions: allSubmissions,
-      stats: {
-        total: allSubmissions.length,
-        submitted: submissions.length,
-        pending: allSubmissions.length - submissions.length,
-        graded: submissions.filter((s) => s.status === 'GRADED').length,
-      },
-    };
     } catch (error) {
-      console.error('TeacherService.getSubmissions error:', error);
+      console.error("TeacherService.getSubmissions error:", error);
       throw error;
     }
   }
@@ -1146,7 +1182,7 @@ class TeacherService {
     submissionId,
     teacherId,
     schoolId,
-    { score, feedback }
+    { score, feedback },
   ) {
     // Get submission with assignment to verify teacher access
     const submission = await prisma.assignmentSubmission.findUnique({
@@ -1157,7 +1193,7 @@ class TeacherService {
     });
 
     if (!submission) {
-      throw new NotFoundError('Submission not found');
+      throw new NotFoundError("Submission not found");
     }
 
     // Verify teacher owns the assignment
@@ -1166,14 +1202,14 @@ class TeacherService {
       submission.assignment.schoolId !== schoolId
     ) {
       throw new NotFoundError(
-        'You do not have permission to grade this submission'
+        "You do not have permission to grade this submission",
       );
     }
 
     // Validate score
     if (score < 0 || score > submission.assignment.maxPoints) {
       throw new BadRequestError(
-        `Score must be between 0 and ${submission.assignment.maxPoints}`
+        `Score must be between 0 and ${submission.assignment.maxPoints}`,
       );
     }
 
@@ -1183,7 +1219,7 @@ class TeacherService {
       data: {
         score,
         feedback,
-        status: 'GRADED',
+        status: "GRADED",
         gradedAt: new Date(),
       },
       include: {
@@ -1203,7 +1239,7 @@ class TeacherService {
     });
 
     logger.info(
-      `Submission graded: ${submissionId} with score ${score} by teacher ${teacherId}`
+      `Submission graded: ${submissionId} with score ${score} by teacher ${teacherId}`,
     );
 
     return updated;
@@ -1233,7 +1269,7 @@ class TeacherService {
       });
 
       if (!classData) {
-        throw new NotFoundError('Class not found or you do not have access');
+        throw new NotFoundError("Class not found or you do not have access");
       }
 
       where.studentId = {
@@ -1266,7 +1302,10 @@ class TeacherService {
         },
         termRef: true,
       },
-      orderBy: [{ student: { user: { lastName: 'asc' } } }, { createdAt: 'desc' }],
+      orderBy: [
+        { student: { user: { lastName: "asc" } } },
+        { createdAt: "desc" },
+      ],
     });
 
     return grades;
@@ -1298,7 +1337,7 @@ class TeacherService {
 
       if (!studentInClass) {
         throw new BadRequestError(
-          `Student ${studentId} is not in your classes`
+          `Student ${studentId} is not in your classes`,
         );
       }
 
@@ -1308,7 +1347,7 @@ class TeacherService {
         teacherId,
         termId,
         subjectCode,
-        term: termId || 'Term 1', // Backward compatibility
+        term: termId || "Term 1", // Backward compatibility
         score,
         letterGrade,
         comments,
@@ -1379,7 +1418,7 @@ class TeacherService {
     });
 
     logger.info(
-      `${results.length} grades saved by teacher ${teacherId} in school ${schoolId}`
+      `${results.length} grades saved by teacher ${teacherId} in school ${schoolId}`,
     );
 
     return results;
@@ -1392,24 +1431,24 @@ class TeacherService {
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes} min ago`;
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
     const days = Math.floor(hours / 24);
-    return `${days} day${days > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? "s" : ""} ago`;
   }
 
   getClassStatus(startTime, endTime) {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
-    
-    const [startHour, startMin] = startTime.split(':').map(Number);
-    const [endHour, endMin] = endTime.split(':').map(Number);
-    
+
+    const [startHour, startMin] = startTime.split(":").map(Number);
+    const [endHour, endMin] = endTime.split(":").map(Number);
+
     const start = startHour * 60 + startMin;
     const end = endHour * 60 + endMin;
 
-    if (currentTime < start) return 'upcoming';
-    if (currentTime >= start && currentTime <= end) return 'in-progress';
-    return 'completed';
+    if (currentTime < start) return "upcoming";
+    if (currentTime >= start && currentTime <= end) return "in-progress";
+    return "completed";
   }
 }
 

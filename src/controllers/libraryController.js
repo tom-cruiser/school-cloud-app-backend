@@ -1,5 +1,6 @@
 const libraryService = require('../services/libraryService');
 const exportService = require('../utils/exportService');
+const bookValidator = require('../utils/bookValidator');
 const logger = require('../config/logger');
 const Joi = require('joi');
 const fs = require('fs').promises;
@@ -437,16 +438,19 @@ class LibraryController {
                 }
               });
 
-              books.push({
+              // Sanitize the extracted data
+              const rawData = {
                 isbn: book.isbn || '',
-                title: book.title,
-                author: book.author,
+                title: book.title || '',
+                author: book.author || '',
                 publisher: book.publisher || null,
-                publishedYear: book.publishedyear ? parseInt(book.publishedyear) : null,
+                publishedYear: book.publishedyear || null,
                 category: book.category || null,
-                totalCopies: parseInt(book.totalcopies || 1),
+                totalCopies: book.totalcopies || 1,
                 description: book.description || null
-              });
+              };
+
+              books.push(bookValidator.sanitizeBookData(rawData));
             }
           });
         }
@@ -463,11 +467,14 @@ class LibraryController {
           data: {
             successCount: result.success.length,
             errorCount: result.errors.length,
-            errors: result.errors
+            skippedCount: result.skipped.length,
+            success: result.success,
+            errors: result.errors,
+            skipped: result.skipped
           }
         });
 
-        logger.info(`Books imported: ${result.success.length} success, ${result.errors.length} errors`, { schoolId });
+        logger.info(`Books imported: ${result.success.length} success, ${result.errors.length} errors, ${result.skipped.length} skipped`, { schoolId });
       } catch (error) {
         // Clean up file on error
         await fs.unlink(filePath).catch(() => {});

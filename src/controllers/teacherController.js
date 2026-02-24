@@ -1,7 +1,11 @@
-const teacherService = require('../services/teacherService');
-const { asyncHandler } = require('../utils/errors');
-const { sendSuccess, sendPaginatedResponse, getPagination } = require('../utils/helpers');
-const Joi = require('joi');
+const teacherService = require("../services/teacherService");
+const { asyncHandler } = require("../utils/errors");
+const {
+  sendSuccess,
+  sendPaginatedResponse,
+  getPagination,
+} = require("../utils/helpers");
+const Joi = require("joi");
 
 class TeacherController {
   /**
@@ -11,7 +15,7 @@ class TeacherController {
   createTeacher = asyncHandler(async (req, res) => {
     const schoolId = req.user.schoolId;
     const teacher = await teacherService.createTeacher(schoolId, req.body);
-    sendSuccess(res, teacher, 'Teacher created successfully', 201);
+    sendSuccess(res, teacher, "Teacher created successfully", 201);
   });
 
   /**
@@ -30,7 +34,14 @@ class TeacherController {
       departmentId,
     });
 
-    sendPaginatedResponse(res, teachers, page || 1, limit || 10, total, 'Teachers retrieved successfully');
+    sendPaginatedResponse(
+      res,
+      teachers,
+      page || 1,
+      limit || 10,
+      total,
+      "Teachers retrieved successfully",
+    );
   });
 
   /**
@@ -39,8 +50,11 @@ class TeacherController {
    */
   getTeacherById = asyncHandler(async (req, res) => {
     const schoolId = req.user.schoolId;
-    const teacher = await teacherService.getTeacherById(req.params.id, schoolId);
-    sendSuccess(res, teacher, 'Teacher retrieved successfully');
+    const teacher = await teacherService.getTeacherById(
+      req.params.id,
+      schoolId,
+    );
+    sendSuccess(res, teacher, "Teacher retrieved successfully");
   });
 
   /**
@@ -49,8 +63,12 @@ class TeacherController {
    */
   updateTeacher = asyncHandler(async (req, res) => {
     const schoolId = req.user.schoolId;
-    const teacher = await teacherService.updateTeacher(req.params.id, schoolId, req.body);
-    sendSuccess(res, teacher, 'Teacher updated successfully');
+    const teacher = await teacherService.updateTeacher(
+      req.params.id,
+      schoolId,
+      req.body,
+    );
+    sendSuccess(res, teacher, "Teacher updated successfully");
   });
 
   /**
@@ -60,7 +78,7 @@ class TeacherController {
   deleteTeacher = asyncHandler(async (req, res) => {
     const schoolId = req.user.schoolId;
     await teacherService.deleteTeacher(req.params.id, schoolId);
-    sendSuccess(res, null, 'Teacher deleted successfully');
+    sendSuccess(res, null, "Teacher deleted successfully");
   });
 
   /**
@@ -70,10 +88,14 @@ class TeacherController {
   getDashboardStats = asyncHandler(async (req, res) => {
     const teacherId = req.user.teacherId;
     const schoolId = req.user.schoolId;
-    console.log(`[getDashboardStats] Fetching stats for teacher: ${teacherId}, school: ${schoolId}`);
+    console.log(
+      `[getDashboardStats] Fetching stats for teacher: ${teacherId}, school: ${schoolId}`,
+    );
     const stats = await teacherService.getDashboardStats(teacherId, schoolId);
-    console.log(`[getDashboardStats] Success - returning stats with ${stats.totalClasses} classes`);
-    sendSuccess(res, stats, 'Dashboard statistics retrieved successfully');
+    console.log(
+      `[getDashboardStats] Success - returning stats with ${stats.totalClasses} classes`,
+    );
+    sendSuccess(res, stats, "Dashboard statistics retrieved successfully");
   });
 
   /**
@@ -85,7 +107,7 @@ class TeacherController {
     console.log(`[getMyProfile] Fetching profile for userId: ${userId}`);
     const profile = await teacherService.getMyProfile(userId);
     console.log(`[getMyProfile] Success - profile retrieved`);
-    sendSuccess(res, profile, 'Profile retrieved successfully');
+    sendSuccess(res, profile, "Profile retrieved successfully");
   });
 
   /**
@@ -95,7 +117,7 @@ class TeacherController {
   updateMyProfile = asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const profile = await teacherService.updateMyProfile(userId, req.body);
-    sendSuccess(res, profile, 'Profile updated successfully');
+    sendSuccess(res, profile, "Profile updated successfully");
   });
 
   /**
@@ -106,7 +128,7 @@ class TeacherController {
     const teacherId = req.user.teacherId;
     const schoolId = req.user.schoolId;
     const classes = await teacherService.getMyClasses(teacherId, schoolId);
-    sendSuccess(res, classes, 'Classes retrieved successfully');
+    sendSuccess(res, classes, "Classes retrieved successfully");
   });
 
   /**
@@ -116,8 +138,12 @@ class TeacherController {
   getClassStudents = asyncHandler(async (req, res) => {
     const teacherId = req.user.teacherId;
     const schoolId = req.user.schoolId;
-    const students = await teacherService.getClassStudents(req.params.id, teacherId, schoolId);
-    sendSuccess(res, students, 'Students retrieved successfully');
+    const students = await teacherService.getClassStudents(
+      req.params.id,
+      teacherId,
+      schoolId,
+    );
+    sendSuccess(res, students, "Students retrieved successfully");
   });
 
   /**
@@ -128,19 +154,24 @@ class TeacherController {
     const { classId, date } = req.query;
     const teacherId = req.user.teacherId;
     const schoolId = req.user.schoolId;
-    
+
     if (!classId || !date) {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'classId and date are required',
+          code: "VALIDATION_ERROR",
+          message: "classId and date are required",
         },
       });
     }
 
-    const attendance = await teacherService.getAttendance(classId, date, teacherId, schoolId);
-    sendSuccess(res, attendance, 'Attendance retrieved successfully');
+    const attendance = await teacherService.getAttendance(
+      classId,
+      date,
+      teacherId,
+      schoolId,
+    );
+    sendSuccess(res, attendance, "Attendance retrieved successfully");
   });
 
   /**
@@ -156,17 +187,23 @@ class TeacherController {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'classId, date, and attendance array are required',
+          code: "VALIDATION_ERROR",
+          message: "classId, date, and attendance array are required",
         },
       });
     }
 
-    const records = await teacherService.markAttendance(classId, date, attendance, teacherId, schoolId);
-    
+    const records = await teacherService.markAttendance(
+      classId,
+      date,
+      attendance,
+      teacherId,
+      schoolId,
+    );
+
     // Emit WebSocket event if available
     if (global.wsServer?.emitToSchool) {
-      global.wsServer.emitToSchool(schoolId, 'attendance:marked', {
+      global.wsServer.emitToSchool(schoolId, "attendance:marked", {
         classId,
         date,
         records,
@@ -174,7 +211,7 @@ class TeacherController {
       });
     }
 
-    sendSuccess(res, records, 'Attendance marked successfully');
+    sendSuccess(res, records, "Attendance marked successfully");
   });
 
   /**
@@ -186,12 +223,16 @@ class TeacherController {
     const schoolId = req.user.schoolId;
     const { classId, status } = req.query;
 
-    const assignments = await teacherService.getAssignments(teacherId, schoolId, {
-      classId,
-      status,
-    });
+    const assignments = await teacherService.getAssignments(
+      teacherId,
+      schoolId,
+      {
+        classId,
+        status,
+      },
+    );
 
-    sendSuccess(res, assignments, 'Assignments retrieved successfully');
+    sendSuccess(res, assignments, "Assignments retrieved successfully");
   });
 
   /**
@@ -205,18 +246,18 @@ class TeacherController {
     const assignment = await teacherService.createAssignment(
       teacherId,
       schoolId,
-      req.body
+      req.body,
     );
 
     // Emit WebSocket event
     if (global.wsServer) {
-      global.wsServer.emitToSchool(schoolId, 'assignmentCreated', {
+      global.wsServer.emitToSchool(schoolId, "assignmentCreated", {
         assignment,
         teacherId,
       });
     }
 
-    sendSuccess(res, assignment, 'Assignment created successfully', 201);
+    sendSuccess(res, assignment, "Assignment created successfully", 201);
   });
 
   /**
@@ -229,11 +270,11 @@ class TeacherController {
     const { id } = req.params;
 
     // Log the request data for debugging
-    console.log('Update assignment request:', {
+    console.log("Update assignment request:", {
       assignmentId: id,
       teacherId,
       schoolId,
-      body: req.body
+      body: req.body,
     });
 
     try {
@@ -241,20 +282,20 @@ class TeacherController {
         id,
         teacherId,
         schoolId,
-        req.body
+        req.body,
       );
 
       // Emit WebSocket event
       if (global.wsServer) {
-        global.wsServer.emitToSchool(schoolId, 'assignmentUpdated', {
+        global.wsServer.emitToSchool(schoolId, "assignmentUpdated", {
           assignment,
           teacherId,
         });
       }
 
-      sendSuccess(res, assignment, 'Assignment updated successfully');
+      sendSuccess(res, assignment, "Assignment updated successfully");
     } catch (error) {
-      console.error('Assignment update error:', error);
+      console.error("Assignment update error:", error);
       throw error;
     }
   });
@@ -272,13 +313,13 @@ class TeacherController {
 
     // Emit WebSocket event
     if (global.wsServer) {
-      global.wsServer.emitToSchool(schoolId, 'assignmentDeleted', {
+      global.wsServer.emitToSchool(schoolId, "assignmentDeleted", {
         assignmentId: id,
         teacherId,
       });
     }
 
-    sendSuccess(res, {}, 'Assignment deleted successfully');
+    sendSuccess(res, {}, "Assignment deleted successfully");
   });
 
   /**
@@ -292,7 +333,7 @@ class TeacherController {
 
     const data = await teacherService.getSubmissions(id, teacherId, schoolId);
 
-    sendSuccess(res, data, 'Submissions retrieved successfully');
+    sendSuccess(res, data, "Submissions retrieved successfully");
   });
 
   /**
@@ -309,18 +350,18 @@ class TeacherController {
       id,
       teacherId,
       schoolId,
-      { score, feedback }
+      { score, feedback },
     );
 
     // Emit WebSocket event
     if (global.wsServer) {
-      global.wsServer.emitToSchool(schoolId, 'submissionGraded', {
+      global.wsServer.emitToSchool(schoolId, "submissionGraded", {
         submission,
         teacherId,
       });
     }
 
-    sendSuccess(res, submission, 'Submission graded successfully');
+    sendSuccess(res, submission, "Submission graded successfully");
   });
 
   /**
@@ -338,7 +379,7 @@ class TeacherController {
       subjectCode,
     });
 
-    sendSuccess(res, grades, 'Grades retrieved successfully');
+    sendSuccess(res, grades, "Grades retrieved successfully");
   });
 
   /**
@@ -353,18 +394,18 @@ class TeacherController {
     const savedGrades = await teacherService.saveGrades(
       teacherId,
       schoolId,
-      grades
+      grades,
     );
 
     // Emit WebSocket event
     if (global.wsServer) {
-      global.wsServer.emitToSchool(schoolId, 'gradesUpdated', {
+      global.wsServer.emitToSchool(schoolId, "gradesUpdated", {
         teacherId,
         count: savedGrades.length,
       });
     }
 
-    sendSuccess(res, savedGrades, 'Grades saved successfully');
+    sendSuccess(res, savedGrades, "Grades saved successfully");
   });
 }
 
@@ -375,10 +416,10 @@ const createTeacherSchema = Joi.object({
     password: Joi.string().min(8).required(),
     firstName: Joi.string().required(),
     lastName: Joi.string().required(),
-    employeeNumber: Joi.string().optional().allow('', null),
-    specialization: Joi.string().optional().allow('', null),
-    departmentId: Joi.string().uuid().optional().allow('', null),
-    hireDate: Joi.date().optional().allow('', null),
+    employeeNumber: Joi.string().optional().allow("", null),
+    specialization: Joi.string().optional().allow("", null),
+    departmentId: Joi.string().uuid().optional().allow("", null),
+    hireDate: Joi.date().optional().allow("", null),
   }),
 });
 
@@ -387,10 +428,10 @@ const updateTeacherSchema = Joi.object({
     email: Joi.string().email().optional(),
     firstName: Joi.string().optional(),
     lastName: Joi.string().optional(),
-    employeeNumber: Joi.string().optional().allow('', null),
-    specialization: Joi.string().optional().allow('', null),
-    departmentId: Joi.string().uuid().optional().allow('', null),
-    hireDate: Joi.date().optional().allow('', null),
+    employeeNumber: Joi.string().optional().allow("", null),
+    specialization: Joi.string().optional().allow("", null),
+    departmentId: Joi.string().uuid().optional().allow("", null),
+    hireDate: Joi.date().optional().allow("", null),
   }),
 });
 

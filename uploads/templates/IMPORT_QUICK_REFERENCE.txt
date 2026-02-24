@@ -1,0 +1,178 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    LIBRARY IMPORT - QUICK REFERENCE                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ EXCEL/CSV STRUCTURE                                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Row 1 (Headers):
+┌─────┬───────┬────────────────┬────────┬────────────┬──────────────┬──────────┬──────────────┬─────────────┐
+│  #  │ Req'd │ Column Name    │ Type   │ Max Length │ Valid Range  │ Default  │ Example      │ Notes       │
+├─────┼───────┼────────────────┼────────┼──────────────┼──────────────┼──────────┼──────────────┼─────────────┤
+│  1  │  No   │ ISBN           │ String │ -          │ ISBN-10/13   │ null     │ 978-3-16-... │ Optional    │
+│  2  │ YES   │ Title          │ String │ 255        │ -            │ -        │ Sample Book  │ Required    │
+│  3  │ YES   │ Author         │ String │ 255        │ -            │ -        │ John Doe     │ Required    │
+│  4  │  No   │ Publisher      │ String │ 255        │ -            │ null     │ Publisher Co │ Optional    │
+│  5  │  No   │ Published Year │ Int    │ -          │ 1000-2027    │ null     │ 2023         │ 4 digits    │
+│  6  │  No   │ Category       │ String │ 100        │ -            │ null     │ Fiction      │ Optional    │
+│  7  │  No   │ Total Copies   │ Int    │ -          │ >= 1         │ 1        │ 5            │ Positive    │
+│  8  │  No   │ Description    │ String │ 2000       │ -            │ null     │ About book..│ Optional    │
+└─────┴───────┴────────────────┴────────┴──────────────┴──────────────┴──────────┴──────────────┴─────────────┘
+
+Row 2+: Your book data
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ VALIDATION RULES                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+REQUIRED FIELDS:
+  ✓ Title - Cannot be empty
+  ✓ Author - Cannot be empty
+
+OPTIONAL WITH VALIDATION:
+  • ISBN: Must be valid ISBN-10 or ISBN-13 format (hyphens allowed)
+    ✓ 978-3-16-148410-0    ✗ 123-456
+  
+  • Published Year: 1000 to 2027
+    ✓ 2023    ✓ 1984    ✗ 3000    ✗ 500
+  
+  • Total Copies: Positive integer >= 1
+    ✓ 1    ✓ 10    ✗ 0    ✗ -5
+
+CHARACTER LIMITS:
+  • Title: 255 chars
+  • Author: 255 chars
+  • Publisher: 255 chars
+  • Category: 100 chars
+  • Description: 2000 chars
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ DUPLICATE DETECTION                                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Books are duplicates if they match on:
+
+1. ISBN MATCH (if both have ISBN)
+   Existing: ISBN 978-3-16-148410-0
+   Import:   ISBN 978-3-16-148410-0  →  SKIPPED ⚠️
+
+2. TITLE + AUTHOR MATCH (case-insensitive)
+   Existing: "To Kill a Mockingbird" by "Harper Lee"
+   Import:   "to kill a mockingbird" by "HARPER LEE"  →  SKIPPED ⚠️
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ IMPORT RESPONSE FORMAT                                                       │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+{
+  "successCount": 95,      ← Books successfully imported
+  "errorCount": 3,         ← Validation errors (NOT imported)
+  "skippedCount": 2,       ← Duplicates (NOT imported)
+  
+  "success": [             ← List of successful imports
+    {
+      "row": 2,
+      "id": "uuid",
+      "title": "Sample Book",
+      "isbn": "978-3-16-148410-0",
+      "author": "John Doe"
+    }
+  ],
+  
+  "errors": [              ← List of validation errors
+    {
+      "row": 5,
+      "title": "Invalid Book",
+      "isbn": "N/A",
+      "error": "Title is required and cannot be empty"
+    }
+  ],
+  
+  "skipped": [             ← List of duplicates
+    {
+      "row": 10,
+      "title": "Duplicate",
+      "isbn": "978-3-16-148410-0",
+      "reason": "Duplicate ISBN: 978-3-16-148410-0"
+    }
+  ]
+}
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ COMMON ERRORS & FIXES                                                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+❌ "Title is required and cannot be empty"
+   → Fill in the Title column for all rows
+
+❌ "Author is required and cannot be empty"
+   → Fill in the Author column for all rows
+
+❌ "Invalid ISBN format. Must be ISBN-10 or ISBN-13"
+   → Use proper ISBN: 978-X-XX-XXXXXX-X or leave empty
+
+❌ "Invalid published year. Must be between 1000 and 2027"
+   → Use 4-digit year within valid range
+
+❌ "Total copies must be a positive integer (minimum 1)"
+   → Use whole numbers: 1, 2, 3... (no negatives or zero)
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ EXAMPLE CSV ROW                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+ISBN,Title,Author,Publisher,Published Year,Category,Total Copies,Description
+978-0-545-01022-1,Harry Potter and the Philosopher's Stone,J.K. Rowling,Bloomsbury,1997,Fantasy,10,First book in the Harry Potter series
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ BEST PRACTICES                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+✓ Download official template first
+✓ Keep headers in row 1
+✓ Fill Title and Author for every book
+✓ Validate data before uploading
+✓ Import in batches (100-500 books)
+✓ Review import results carefully
+✓ Fix errors and re-import if needed
+
+✗ Don't remove/rename headers
+✗ Don't exceed 5MB file size
+✗ Don't leave required fields empty
+✗ Don't use invalid ISBN formats
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ FILE REQUIREMENTS                                                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+• Format: .csv, .xlsx, or .xls
+• Max Size: 5 MB
+• Encoding: UTF-8 recommended
+• First Row: Column headers (required)
+• Data: Starts from row 2
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ API ENDPOINT                                                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+POST /api/v1/library/import/books
+Content-Type: multipart/form-data
+Authentication: Required (JWT token)
+
+Template Download:
+GET /api/v1/library/template?format=excel
+GET /api/v1/library/template?format=csv
+
+
+═══════════════════════════════════════════════════════════════════════════════
+For detailed documentation, see: LIBRARY_API_DOCUMENTATION.md
+For complete guide, see: LIBRARY_IMPORT_GUIDE.md
+═══════════════════════════════════════════════════════════════════════════════

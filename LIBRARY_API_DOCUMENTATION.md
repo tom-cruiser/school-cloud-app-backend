@@ -27,6 +27,15 @@ The Library Management System provides comprehensive book and loan management wi
 - Export books and loans to PDF, Excel, or CSV
 - Bulk import books from CSV or Excel
 - Download import templates
+- **Advanced validation & duplicate detection**
+- Comprehensive error reporting with row numbers
+
+✅ **Data Validation**
+- ISBN format validation (ISBN-10/ISBN-13)
+- Required fields enforcement
+- Data type and range validation
+- Character limit validation
+- Duplicate detection by ISBN and Title+Author
 
 ## API Endpoints
 
@@ -292,6 +301,26 @@ ISBN,Title,Author,Publisher,Published Year,Category,Total Copies,Description
 **Excel Format:**
 Same columns as CSV in the first worksheet.
 
+**Column Requirements:**
+- **ISBN** (Optional): Valid ISBN-10 or ISBN-13 format
+- **Title** (Required): Maximum 255 characters
+- **Author** (Required): Maximum 255 characters  
+- **Publisher** (Optional): Maximum 255 characters
+- **Published Year** (Optional): Integer between 1000 and current year + 1
+- **Category** (Optional): Maximum 100 characters
+- **Total Copies** (Optional): Positive integer, minimum 1, defaults to 1
+- **Description** (Optional): Maximum 2000 characters
+
+**Validation & Duplicate Detection:**
+- Required fields validation (Title, Author)
+- ISBN format validation (if provided)
+- Published year range validation
+- Total copies must be positive integer
+- **Duplicate Detection:**
+  - By ISBN (if same ISBN exists)
+  - By Title + Author combination (case-insensitive)
+  - Duplicates are skipped and reported
+
 **Response:**
 ```json
 {
@@ -299,16 +328,56 @@ Same columns as CSV in the first worksheet.
   "message": "Import completed",
   "data": {
     "successCount": 95,
-    "errorCount": 5,
+    "errorCount": 3,
+    "skippedCount": 2,
+    "success": [
+      {
+        "row": 2,
+        "id": "uuid",
+        "title": "Sample Book",
+        "isbn": "978-3-16-148410-0",
+        "author": "John Doe"
+      }
+    ],
     "errors": [
       {
+        "row": 5,
+        "title": "Invalid Book",
+        "isbn": "N/A",
+        "error": "Title is required and cannot be empty"
+      },
+      {
+        "row": 8,
+        "title": "Bad Year Book",
+        "isbn": "978-1234567890",
+        "error": "Invalid published year. Must be between 1000 and 2027"
+      }
+    ],
+    "skipped": [
+      {
+        "row": 10,
         "title": "Duplicate Book",
-        "error": "Book already exists"
+        "isbn": "978-3-16-148410-0",
+        "reason": "Duplicate ISBN: 978-3-16-148410-0"
+      },
+      {
+        "row": 15,
+        "title": "Another Duplicate",
+        "isbn": "N/A",
+        "reason": "Duplicate book: \"Sample Book\" by John Doe"
       }
     ]
   }
 }
 ```
+
+**Import Summary:**
+- `successCount`: Number of books successfully imported
+- `errorCount`: Number of books with validation errors
+- `skippedCount`: Number of duplicate books skipped
+- `success`: Array of successfully imported books with row numbers
+- `errors`: Array of validation errors with row numbers and error messages
+- `skipped`: Array of skipped duplicates with row numbers and reasons
 
 #### Download Import Template
 ```
@@ -594,3 +663,134 @@ All endpoints return consistent error responses:
 - Import validates data before insertion
 - Failed imports provide detailed error reports
 - Book availability updated atomically in transactions
+
+---
+
+## Import Validation Rules
+
+### Required Fields
+- **Title**: Must be provided and cannot be empty
+- **Author**: Must be provided and cannot be empty
+
+### Optional Fields with Validation
+
+#### ISBN
+- **Format**: Must be valid ISBN-10 or ISBN-13
+- **Examples**: 
+  - Valid: `978-3-16-148410-0`, `0-13-468599-2`
+  - Invalid: `123-456`, `ABC-DEF-GHI`
+- **Note**: Hyphens and spaces are allowed and will be processed correctly
+
+#### Published Year
+- **Type**: Integer
+- **Range**: 1000 to (Current Year + 1)
+- **Example**: For 2026, valid range is 1000-2027
+
+#### Total Copies
+- **Type**: Integer
+- **Minimum**: 1
+- **Default**: 1 if not provided
+- **Note**: Must be a positive whole number
+
+#### Character Limits
+| Field | Maximum Length |
+|-------|----------------|
+| Title | 255 characters |
+| Author | 255 characters |
+| Publisher | 255 characters |
+| Category | 100 characters |
+| Description | 2000 characters |
+
+### Duplicate Detection
+
+Books are considered duplicates if they match on:
+
+1. **ISBN Match**: Same ISBN (if both books have ISBN)
+   - Example: Both have ISBN `978-3-16-148410-0`
+
+2. **Title + Author Match**: Same title AND author (case-insensitive)
+   - Example: "To Kill a Mockingbird" by "Harper Lee"
+   - Matches: "to kill a mockingbird" by "HARPER LEE"
+
+**Duplicate Behavior:**
+- Duplicates found in existing database → Skipped
+- Duplicates found within import file → Skipped  
+- All duplicates are reported in the `skipped` array with reasons
+
+### Import Error Examples
+
+```json
+// Validation Error - Missing Required Field
+{
+  "row": 5,
+  "title": "N/A",
+  "isbn": "978-1234567890",
+  "error": "Title is required and cannot be empty"
+}
+
+// Validation Error - Invalid ISBN
+{
+  "row": 8,
+  "title": "Sample Book",
+  "isbn": "123-456",
+  "error": "Invalid ISBN format. Must be ISBN-10 or ISBN-13"
+}
+
+// Validation Error - Invalid Year
+{
+  "row": 12,
+  "title": "Future Book",
+  "isbn": "978-1234567890",
+  "error": "Invalid published year. Must be between 1000 and 2027"
+}
+
+// Validation Error - Invalid Copies
+{
+  "row": 15,
+  "title": "No Copies Book",
+  "isbn": "978-1234567890",
+  "error": "Total copies must be a positive integer (minimum 1)"
+}
+
+// Duplicate - ISBN Match
+{
+  "row": 20,
+  "title": "Duplicate Book",
+  "isbn": "978-3-16-148410-0",
+  "reason": "Duplicate ISBN: 978-3-16-148410-0"
+}
+
+// Duplicate - Title+Author Match
+{
+  "row": 25,
+  "title": "Sample Book",
+  "isbn": "N/A",
+  "reason": "Duplicate book: \"Sample Book\" by John Doe"
+}
+```
+
+### Best Practices for Import
+
+1. **Download Template First**: Always start with the official template
+2. **Validate Data**: Check your data before import:
+   - Ensure Title and Author are filled for all rows  
+   - Verify ISBN format if provided
+   - Check year values are reasonable
+   - Ensure Total Copies is at least 1
+3. **Check for Duplicates**: Review existing library before importing
+4. **Review Results**: Always check the import response for errors and skipped items
+5. **Incremental Imports**: For large datasets, consider importing in batches
+
+### Import Response Interpretation
+
+```json
+{
+  "successCount": 95,   // Books successfully added
+  "errorCount": 3,      // Books with validation errors (not imported)
+  "skippedCount": 2     // Duplicate books (not imported)
+}
+```
+
+- **Total Rows Processed**: successCount + errorCount + skippedCount
+- **Review Errors**: Fix validation issues in your file and re-import
+- **Review Skipped**: Duplicates are intentionally skipped to prevent duplicate entries

@@ -31,6 +31,7 @@ const discussionRoutes = require('./discussionRoutes');
 const lessonPlanRoutes = require('./lessonPlanRoutes');
 const schoolSettingsRoutes = require('./schoolSettingsRoutes');
 const config = require('../config');
+const subscriptionRoutes = require('./subscriptionRoutes');
 
 const router = express.Router();
 
@@ -70,6 +71,9 @@ router.use('/analytics', userAnalyticsRoutes);
 router.use('/announcements', announcementRoutes);
 router.use('/library', libraryRoutes);
 router.use('/attendance', attendanceRoutes);
+
+// Subscription plans
+router.use('/subscription', subscriptionRoutes);
 router.use('/lesson-plans', lessonPlanRoutes);
 router.use('/schools', schoolSettingsRoutes);
 router.use('/system', systemRoutes);

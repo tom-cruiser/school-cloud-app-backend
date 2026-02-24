@@ -1,6 +1,7 @@
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const { parse } = require('csv-parse/sync');
+const bookValidator = require('./bookValidator');
 
 class ExportService {
   // ==================== EXCEL EXPORT ====================
@@ -389,18 +390,22 @@ class ExportService {
         trim: true
       });
 
-      return records.map(record => ({
-        isbn: record.ISBN || record.isbn || '',
-        title: record.Title || record.title,
-        author: record.Author || record.author,
-        publisher: record.Publisher || record.publisher || null,
-        publishedYear: record['Published Year'] || record.publishedYear 
-          ? parseInt(record['Published Year'] || record.publishedYear) 
-          : null,
-        category: record.Category || record.category || null,
-        totalCopies: parseInt(record['Total Copies'] || record.totalCopies || 1),
-        description: record.Description || record.description || null
-      }));
+      return records.map((record, index) => {
+        // Extract and sanitize data
+        const bookData = {
+          isbn: record.ISBN || record.isbn || '',
+          title: record.Title || record.title || '',
+          author: record.Author || record.author || '',
+          publisher: record.Publisher || record.publisher || null,
+          publishedYear: record['Published Year'] || record.publishedYear || record.PublishedYear || null,
+          category: record.Category || record.category || null,
+          totalCopies: record['Total Copies'] || record.totalCopies || record.TotalCopies || 1,
+          description: record.Description || record.description || null
+        };
+
+        // Sanitize the data
+        return bookValidator.sanitizeBookData(bookData);
+      });
     } catch (error) {
       throw new Error(`CSV parsing error: ${error.message}`);
     }

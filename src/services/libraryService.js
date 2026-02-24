@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const logger = require('../config/logger');
+const bookValidator = require('../utils/bookValidator');
 
 const prisma = new PrismaClient();
 
@@ -502,25 +503,115 @@ class LibraryService {
     try {
       const results = {
         success: [],
-        errors: []
+        errors: [],
+        skipped: []
       };
 
-      for (const bookData of books) {
+      // Get existing books for duplicate detection
+      const existingBooks = await prisma.book.findMany({
+        where: { schoolId },
+        select: {
+          id: true,
+          isbn: true,
+          title: true,
+          author: true
+        }
+      });
+
+      // Track processed books in this import batch to detect duplicates within the file
+      const processedInBatch = [];
+
+      for (let i = 0; i < books.length; i++) {
+        const rowNumber = i + 2; // +2 because row 1 is header, and index starts at 0
+        const rawBookData = books[i];
+
         try {
+          // Sanitize data first
+          const bookData = bookValidator.sanitizeBookData(rawBookData);
+
+          // Validate book data
+          const validation = bookValidator.validateBook(bookData);
+          if (!validation.valid) {
+            results.errors.push({
+              row: rowNumber,
+              title: bookData.title || 'N/A',
+              isbn: bookData.isbn || 'N/A',
+              error: validation.errors.join('; ')
+            });
+            continue;
+          }
+
+          // Check for duplicates in existing database
+          let isDuplicate = false;
+          let duplicateReason = '';
+
+          for (const existingBook of existingBooks) {
+            const dupCheck = bookValidator.checkDuplicate(bookData, existingBook);
+            if (dupCheck.isDuplicate) {
+              isDuplicate = true;
+              duplicateReason = dupCheck.reason;
+              break;
+            }
+          }
+
+          if (isDuplicate) {
+            results.skipped.push({
+              row: rowNumber,
+              title: bookData.title,
+              isbn: bookData.isbn || 'N/A',
+              reason: duplicateReason
+            });
+            continue;
+          }
+
+          // Check for duplicates within the import batch
+          for (const processedBook of processedInBatch) {
+            const dupCheck = bookValidator.checkDuplicate(bookData, processedBook);
+            if (dupCheck.isDuplicate) {
+              isDuplicate = true;
+              duplicateReason = `${dupCheck.reason} (duplicate in import file)`;
+              break;
+            }
+          }
+
+          if (isDuplicate) {
+            results.skipped.push({
+              row: rowNumber,
+              title: bookData.title,
+              isbn: bookData.isbn || 'N/A',
+              reason: duplicateReason
+            });
+            continue;
+          }
+
+          // Create the book
           const book = await this.createBook(schoolId, {
             ...bookData,
             availableCopies: bookData.totalCopies || 1
           });
-          results.success.push({ ...bookData, id: book.id });
+
+          results.success.push({
+            row: rowNumber,
+            id: book.id,
+            title: book.title,
+            isbn: book.isbn || 'N/A',
+            author: book.author
+          });
+
+          // Add to batch tracking
+          processedInBatch.push(bookData);
+
         } catch (error) {
           results.errors.push({
-            ...bookData,
+            row: rowNumber,
+            title: rawBookData.title || 'N/A',
+            isbn: rawBookData.isbn || 'N/A',
             error: error.message
           });
         }
       }
 
-      logger.info(`Bulk import completed: ${results.success.length} success, ${results.errors.length} errors`);
+      logger.info(`Bulk import completed: ${results.success.length} success, ${results.errors.length} errors, ${results.skipped.length} skipped`);
       return results;
     } catch (error) {
       logger.error('Error in bulk import:', error);
